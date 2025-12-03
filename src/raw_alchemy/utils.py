@@ -226,6 +226,7 @@ def auto_expose_hybrid(img_linear: np.ndarray, source_colorspace: colour.RGB_Col
     # 最后的安全范围 (允许调暗，也允许调亮)
     gain = np.clip(gain, 0.1, 100.0)
     
+    print(f"  ⚖️  [Auto Exposure] Hybrid Gain: {gain:.4f}")
     return img_linear * gain
 
 def auto_expose_linear(img_linear: np.ndarray, source_colorspace: colour.RGB_Colourspace, target_gray: float = 0.18) -> np.ndarray:
