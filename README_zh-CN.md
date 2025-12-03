@@ -122,6 +122,6 @@ raw-alchemy "input.CR3" "output_bright.tiff" --log-space "S-Log3" --exposure 1.5
 -   `Canon Log 3`
 -   `S-Log3`
 -   `S-Log3.Cine`
--   `LogC3`
--   `LogC4`
+-   `Arri LogC3`
+-   `Arri LogC4`
 -   `Log3G10`

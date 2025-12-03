@@ -19,7 +19,7 @@ LOG_TO_WORKING_SPACE = {
     'S-Log3.Cine': 'S-Gamut3.Cine',
     'Arri LogC3': 'ARRI Wide Gamut 3',
     'Arri LogC4': 'ARRI Wide Gamut 4',
-    'Log3G10': 'RED Wide Gamut RGB',
+    'Log3G10': 'REDWideGamutRGB',
 }
 
 # 2. 映射：复合名称 -> colour 库识别的 Log 编码函数名称
