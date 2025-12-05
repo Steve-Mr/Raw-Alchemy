@@ -170,15 +170,6 @@ RawAlchemy-v0.1.0-windows.exe [OPTIONS] <INPUT_RAW_PATH> <OUTPUT_TIFF_PATH>
 raw-alchemy [OPTIONS] <INPUT_RAW_PATH> <OUTPUT_TIFF_PATH>
 ```
 
-#### 示例 4: 使用自定义镜头数据库
-
-此示例使用一个自定义的镜头数据库文件，以获得更精确的镜头校正。
-
-```bash
-# 将 './RawAlchemy-linux' 替换为您的可执行文件名或 'raw-alchemy'
-./RawAlchemy-linux "input.ARW" "output.tiff" --log-space "S-Log3" --custom-lensfun-db "path/to/your/_lcps.xml"
-```
-
 #### 示例 1: 基本 Log 转换
 
 此示例将一个 RAW 文件转换为线性空间，然后应用 F-Log2 曲线，并将结果保存为 TIFF 文件（保持 F-Log2/F-Gamut 空间，适合后续调色）。
@@ -204,6 +195,15 @@ raw-alchemy [OPTIONS] <INPUT_RAW_PATH> <OUTPUT_TIFF_PATH>
 ```bash
 # 将 './RawAlchemy-linux' 替换为您的可执行文件名或 'raw-alchemy'
 ./RawAlchemy-linux "input.CR3" "output_bright.tiff" --log-space "S-Log3" --exposure 1.5
+```
+
+#### 示例 4: 使用自定义镜头数据库
+
+此示例使用一个自定义的镜头数据库文件，以获得更精确的镜头校正。
+
+```bash
+# 将 './RawAlchemy-linux' 替换为您的可执行文件名或 'raw-alchemy'
+./RawAlchemy-linux "input.ARW" "output.tiff" --log-space "S-Log3" --custom-lensfun-db "path/to/your/_lcps.xml"
 ```
 
 ### 命令行选项

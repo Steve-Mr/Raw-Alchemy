@@ -170,15 +170,6 @@ RawAlchemy-v0.1.0-windows.exe [OPTIONS] <INPUT_RAW_PATH> <OUTPUT_TIFF_PATH>
 raw-alchemy [OPTIONS] <INPUT_RAW_PATH> <OUTPUT_TIFF_PATH>
 ```
 
-#### Example 4: Using a Custom Lens Database
-
-This example uses a custom lens database file for more accurate lens corrections.
-
-```bash
-# Replace './RawAlchemy-linux' with your executable name or 'raw-alchemy'
-./RawAlchemy-linux "input.ARW" "output.tiff" --log-space "S-Log3" --custom-lensfun-db "path/to/your/_lcps.xml"
-```
-
 #### Example 1: Basic Log Conversion
 
 This example converts a RAW file to linear space, then applies the F-Log2 curve, and saves the result as a TIFF file (keeping F-Log2/F-Gamut space, suitable for subsequent grading).
@@ -204,6 +195,15 @@ This example manually applies a +1.5 stop exposure compensation, overriding any 
 ```bash
 # Replace './RawAlchemy-linux' with your executable name or 'raw-alchemy'
 ./RawAlchemy-linux "input.CR3" "output_bright.tiff" --log-space "S-Log3" --exposure 1.5
+```
+
+#### Example 4: Using a Custom Lens Database
+
+This example uses a custom lens database file for more accurate lens corrections.
+
+```bash
+# Replace './RawAlchemy-linux' with your executable name or 'raw-alchemy'
+./RawAlchemy-linux "input.ARW" "output.tiff" --log-space "S-Log3" --custom-lensfun-db "path/to/your/_lcps.xml"
 ```
 
 ### Command Line Options
