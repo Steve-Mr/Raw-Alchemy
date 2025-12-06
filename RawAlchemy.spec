@@ -38,24 +38,61 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
-exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.datas,
-    [],
-    name='RawAlchemy',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=strip_executable,
-    upx=False,
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=False,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-    icon='icon.ico',
-)
+# Platform-specific EXE and BUNDLE for macOS .app creation
+if sys.platform == 'darwin':
+    # For macOS, create a one-folder bundle (.app)
+    exe = EXE(
+        pyz,
+        a.scripts,
+        [],
+        name='RawAlchemy',
+        debug=False,
+        bootloader_ignore_signals=False,
+        strip=strip_executable,
+        upx=False,
+        runtime_tmpdir=None,
+        console=False,
+        disable_windowed_traceback=False,
+        argv_emulation=False,
+        target_arch=None,
+        codesign_identity=None,
+        entitlements_file=None,
+        icon='icon.icns',
+    )
+    coll = COLLECT(
+        exe,
+        a.binaries,
+        a.datas,
+        strip=strip_executable,
+        upx=False,
+        name='RawAlchemy',
+    )
+    app = BUNDLE(
+        coll,
+        name='RawAlchemy.app',
+        icon='icon.icns',
+        bundle_identifier=None,
+    )
+else:
+    # For Windows and Linux, create a one-file executable
+    exe = EXE(
+        pyz,
+        a.scripts,
+        a.binaries,
+        a.datas,
+        [],
+        name='RawAlchemy',
+        debug=False,
+        bootloader_ignore_signals=False,
+        strip=strip_executable,
+        upx=False,
+        upx_exclude=[],
+        runtime_tmpdir=None,
+        console=False,
+        disable_windowed_traceback=False,
+        argv_emulation=False,
+        target_arch=None,
+        codesign_identity=None,
+        entitlements_file=None,
+        icon='icon.ico',
+    )

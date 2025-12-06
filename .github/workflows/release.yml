@@ -95,7 +95,24 @@ jobs:
           python-version: '3.12'
 
       - name: Install macOS system dependencies
-        run: brew install libraw
+        run: |
+          brew install libraw
+          brew install create-dmg
+
+      - name: Convert PNG to ICNS for macOS icon
+        run: |
+          mkdir -p icon.iconset
+          sips -z 16 16     icon.png --out icon.iconset/icon_16x16.png
+          sips -z 32 32     icon.png --out icon.iconset/icon_16x16@2x.png
+          sips -z 32 32     icon.png --out icon.iconset/icon_32x32.png
+          sips -z 64 64     icon.png --out icon.iconset/icon_32x32@2x.png
+          sips -z 128 128   icon.png --out icon.iconset/icon_128x128.png
+          sips -z 256 256   icon.png --out icon.iconset/icon_128x128@2x.png
+          sips -z 256 256   icon.png --out icon.iconset/icon_256x256.png
+          sips -z 512 512   icon.png --out icon.iconset/icon_256x256@2x.png
+          sips -z 512 512   icon.png --out icon.iconset/icon_512x512.png
+          sips -z 1024 1024 icon.png --out icon.iconset/icon_512x512@2x.png
+          iconutil -c icns icon.iconset
 
       - name: Download and Extract Lensfun
         run: |
@@ -113,11 +130,25 @@ jobs:
       - name: Build executable with PyInstaller
         run: pyinstaller RawAlchemy.spec
 
+      - name: Package macOS .app into .dmg
+        run: |
+          tag="${{ github.ref_name }}"
+          create-dmg \
+            --volname "RawAlchemy Installer" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "RawAlchemy.app" 200 190 \
+            --hide-extension "RawAlchemy.app" \
+            --app-drop-link 600 185 \
+            "dist/RawAlchemy-${tag}-macos.dmg" \
+            "dist/RawAlchemy.app"
+
       - name: Upload macOS Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: RawAlchemy-macos
-          path: dist/RawAlchemy
+          name: RawAlchemy-macos-dmg
+          path: dist/*.dmg
 
   release:
     name: Create Release
@@ -136,7 +167,8 @@ jobs:
           tag="${{ github.ref_name }}"
           mv artifacts/RawAlchemy-windows/RawAlchemy.exe "RawAlchemy-${tag}-windows.exe"
           mv artifacts/RawAlchemy-linux/RawAlchemy "RawAlchemy-${tag}-linux"
-          mv artifacts/RawAlchemy-macos/RawAlchemy "RawAlchemy-${tag}-macos"
+          # The macOS artifact is now a DMG and already named correctly
+          mv artifacts/RawAlchemy-macos-dmg/*.dmg .
         shell: bash
 
       - name: Create Release and Upload Assets
@@ -145,4 +177,4 @@ jobs:
           files: |
             RawAlchemy-*-windows.exe
             RawAlchemy-*-linux
-            RawAlchemy-*-macos
+            RawAlchemy-*-macos.dmg
