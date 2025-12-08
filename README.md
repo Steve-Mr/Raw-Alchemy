@@ -126,7 +126,7 @@ The **Metering** dropdown (available in `Auto` mode) lets you choose a strategy 
 
 Raw Alchemy now includes a powerful script to convert and import lens profiles from Adobe's LCP format, which is used by Adobe Camera Raw and DNG Converter. This gives you access to a much larger and more up-to-date lens database.
 
-The conversion script, lensfun-convert-lcp-new, can be found at https://gitee.com/shenmintao/lensfun.
+The conversion script, lensfun-convert-lcp-new, can be found at https://github.com/shenmintao/lensfun.
 
 **Steps:**
 
