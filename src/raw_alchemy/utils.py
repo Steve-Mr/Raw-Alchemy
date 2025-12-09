@@ -211,7 +211,7 @@ def auto_expose_highlight_safe(img_linear: np.ndarray, clip_threshold: float = 1
     
     # 2. 在小图上找 Max
     max_vals = np.max(sample, axis=2)
-    high_percentile = np.percentile(max_vals, 99.5)
+    high_percentile = np.percentile(max_vals, 99.0)
     
     target_high = 0.9  
     if high_percentile < 1e-6:
@@ -260,13 +260,13 @@ def auto_expose_hybrid(img_linear: np.ndarray, source_colorspace, target_gray: f
     
     # 3. 检查高光 (在采样图上检查即可)
     max_vals = np.max(sample, axis=2)
-    p995 = np.percentile(max_vals, 99.5)
+    p99 = np.percentile(max_vals, 99.0)
     
-    potential_peak = p995 * base_gain
+    potential_peak = p99 * base_gain
     max_allowed_peak = 6.0 
     
     if potential_peak > max_allowed_peak:
-        limited_gain = max_allowed_peak / p995
+        limited_gain = max_allowed_peak / p99
         logger(f"  🛡️  [Auto Exposure] Hybrid limited. (Desired: {base_gain:.2f} -> Actual: {limited_gain:.2f})")
         gain = limited_gain
     else:
@@ -340,12 +340,12 @@ def auto_expose_matrix(img_linear: np.ndarray, source_colorspace, target_gray: f
 
     # 7. 与 Hybrid 类似的保护性削减
     max_vals = np.max(sample, axis=2)
-    p995 = np.percentile(max_vals, 99.5)
-    potential_peak = p995 * gain
+    p99 = np.percentile(max_vals, 99.0)
+    potential_peak = p99 * gain
     max_allowed_peak = 6.0
     
     if potential_peak > max_allowed_peak:
-        limited_gain = max_allowed_peak / p995
+        limited_gain = max_allowed_peak / p99
         logger(f"  🛡️  [Auto Exposure] Matrix limited. (Desired: {gain:.2f} -> Actual: {limited_gain:.2f})")
         gain = limited_gain
 
