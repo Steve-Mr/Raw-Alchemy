@@ -104,6 +104,8 @@ def process_image(
     )
     if not img.flags['C_CONTIGUOUS']:
         img = np.ascontiguousarray(img)
+    if img.dtype != np.float32:
+        img = img.astype(np.float32)
     utils.apply_matrix_inplace(img, M)
     
     # 4.2 Log 编码
@@ -121,7 +123,10 @@ def process_image(
             if isinstance(lut, colour.LUT3D):
                 if not img.flags['C_CONTIGUOUS']:
                     img = np.ascontiguousarray(img)
-                
+                if img.dtype != np.float32:
+                    img = img.astype(np.float32)
+                if lut.table.dtype != np.float32:
+                    lut.table = lut.table.astype(np.float32)
                 utils.apply_lut_inplace(img, lut.table, lut.domain[0], lut.domain[1])
             else:
                 # 1D LUT 使用 colour 库默认方法

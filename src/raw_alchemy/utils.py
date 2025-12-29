@@ -8,70 +8,290 @@ from numba import njit, prange
 # Numba 加速核函数 (In-Place / 无内存分配)
 # =========================================================
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=True, fastmath=True, cache=True)
 def apply_matrix_inplace(img, matrix):
-    """(保持不变) 原位应用 3x3 颜色矩阵"""
-    rows, cols, _ = img.shape
+    """
+    高性能原位矩阵变换
+    优化点: 
+    1. 视图打平 (Flatten View) 以最大化并行粒度
+    2. 显式读取变量以利用寄存器
+    """
+    # 获取图像总像素数
+    rows, cols, channels = img.shape
+    n_pixels = rows * cols
+    
+    # 创建 (N, 3) 的视图，零拷贝 (Zero-copy)
+    # 只要输入是 C-contiguous 的，这步极快
+    flat_img = img.reshape(n_pixels, channels)
+
+    # 预加载矩阵参数到寄存器
     m00, m01, m02 = matrix[0, 0], matrix[0, 1], matrix[0, 2]
     m10, m11, m12 = matrix[1, 0], matrix[1, 1], matrix[1, 2]
     m20, m21, m22 = matrix[2, 0], matrix[2, 1], matrix[2, 2]
 
-    for r in prange(rows):
-        for c in range(cols):
-            r_val, g_val, b_val = img[r, c, 0], img[r, c, 1], img[r, c, 2]
-            img[r, c, 0] = r_val * m00 + g_val * m01 + b_val * m02
-            img[r, c, 1] = r_val * m10 + g_val * m11 + b_val * m12
-            img[r, c, 2] = r_val * m20 + g_val * m21 + b_val * m22
+    # 并行循环：一维化处理
+    for i in prange(n_pixels):
+        r = flat_img[i, 0]
+        g = flat_img[i, 1]
+        b = flat_img[i, 2]
+        
+        # 写入结果
+        flat_img[i, 0] = r * m00 + g * m01 + b * m02
+        flat_img[i, 1] = r * m10 + g * m11 + b * m12
+        flat_img[i, 2] = r * m20 + g * m21 + b * m22
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=True, fastmath=True, cache=True)
 def apply_lut_inplace(img, lut_table, domain_min, domain_max):
-    """(保持不变) 原位 3D LUT 插值"""
-    # ... (代码与你提供的一致，省略以节省篇幅，直接保留你原来的即可) ...
-    # 为了完整性，这里简写，请务必保留你原来完整的逻辑
-    input_is_2d = img.ndim == 2
-    if input_is_2d:
-        rows, cols = img.shape[0], 1
-        img_3d = img.reshape(rows, 1, 3)
+    """
+    高性能原位四面体插值 (Tetrahedral Interpolation)
+    
+    优势:
+    1. 内存访问减少 50% (只读 4 个点，而不是 8 个)
+    2. 色彩精度更高，特别是对于灰阶和肤色
+    3. 使用了显式的 6 种情况分支，编译器通常能将其优化为高效的跳转表
+    """
+    # ---------------------------
+    # 1. 数据准备与打平
+    # ---------------------------
+    if img.ndim == 2:
+        n_pixels = img.shape[0]
+        flat_img = img.reshape(n_pixels, 1) # 防御性代码
     else:
         rows, cols, _ = img.shape
-        img_3d = img
+        n_pixels = rows * cols
+        flat_img = img.reshape(n_pixels, 3)
 
+    # 预计算常量
     size = lut_table.shape[0]
     size_minus_1 = size - 1
+    size_float = float(size_minus_1)
+    
     scale_r = size_minus_1 / (domain_max[0] - domain_min[0])
     scale_g = size_minus_1 / (domain_max[1] - domain_min[1])
     scale_b = size_minus_1 / (domain_max[2] - domain_min[2])
-    min_r, min_g, min_b = domain_min
+    
+    min_r, min_g, min_b = domain_min[0], domain_min[1], domain_min[2]
 
-    for r in prange(rows):
-        for c in range(cols):
-            in_r, in_g, in_b = img_3d[r, c, 0], img_3d[r, c, 1], img_3d[r, c, 2]
-            idx_r = (in_r - min_r) * scale_r
-            idx_g = (in_g - min_g) * scale_g
-            idx_b = (in_b - min_b) * scale_b
-            
-            if idx_r < 0: idx_r = 0.0
-            elif idx_r > size_minus_1: idx_r = float(size_minus_1)
-            if idx_g < 0: idx_g = 0.0
-            elif idx_g > size_minus_1: idx_g = float(size_minus_1)
-            if idx_b < 0: idx_b = 0.0
-            elif idx_b > size_minus_1: idx_b = float(size_minus_1)
+    # ---------------------------
+    # 2. 并行像素循环
+    # ---------------------------
+    for i in prange(n_pixels):
+        # --- A. 坐标归一化 ---
+        in_r = flat_img[i, 0]
+        in_g = flat_img[i, 1]
+        in_b = flat_img[i, 2]
 
-            x0, y0, z0 = int(idx_r), int(idx_g), int(idx_b)
-            x1 = x0 + 1 if x0 < size_minus_1 else size_minus_1
-            y1 = y0 + 1 if y0 < size_minus_1 else size_minus_1
-            z1 = z0 + 1 if z0 < size_minus_1 else size_minus_1
-            
-            dx, dy, dz = idx_r - x0, idx_g - y0, idx_b - z0
-            
-            for k in range(3):
-                c00 = lut_table[x0, y0, z0, k] * (1 - dx) + lut_table[x1, y0, z0, k] * dx
-                c01 = lut_table[x0, y0, z1, k] * (1 - dx) + lut_table[x1, y0, z1, k] * dx
-                c10 = lut_table[x0, y1, z0, k] * (1 - dx) + lut_table[x1, y1, z0, k] * dx
-                c11 = lut_table[x0, y1, z1, k] * (1 - dx) + lut_table[x1, y1, z1, k] * dx
-                c0 = c00 * (1 - dy) + c10 * dy
-                c1 = c01 * (1 - dy) + c11 * dy
-                img_3d[r, c, k] = c0 * (1 - dz) + c1 * dz
+        raw_idx_r = (in_r - min_r) * scale_r
+        raw_idx_g = (in_g - min_g) * scale_g
+        raw_idx_b = (in_b - min_b) * scale_b
+
+        # 钳位 (Clamping)
+        idx_r = min(max(raw_idx_r, 0.0), size_float)
+        idx_g = min(max(raw_idx_g, 0.0), size_float)
+        idx_b = min(max(raw_idx_b, 0.0), size_float)
+
+        # --- B. 计算整数坐标 (x0) 和 小数部分 (d) ---
+        x0 = int(idx_r)
+        y0 = int(idx_g)
+        z0 = int(idx_b)
+
+        # 边界保护：确保 x1 不会越界
+        # 注意：如果 x0 已经是 size_minus_1，x1 应该保持 size_minus_1
+        x1 = x0 + 1
+        if x0 == size_minus_1: x1 = x0
+        
+        y1 = y0 + 1
+        if y0 == size_minus_1: y1 = y0
+        
+        z1 = z0 + 1
+        if z0 == size_minus_1: z1 = z0
+
+        # 计算权重 (Delta)
+        dx = idx_r - x0
+        dy = idx_g - y0
+        dz = idx_b - z0
+
+        # --- C. 四面体判定逻辑 (Tetrahedral Logic) ---
+        # 我们需要找到包围该点的 4 个顶点。
+        # P0 (x0, y0, z0) 和 P3 (x1, y1, z1) 总是存在的。
+        # 剩下的 P1 和 P2 取决于 dx, dy, dz 的大小关系。
+        
+        # 定义临时变量用于存储插值结果
+        r_val = 0.0
+        g_val = 0.0
+        b_val = 0.0
+
+        # 读取基础点 P0 (Base) 和 对角点 P3 (Opposite)
+        # 这样写虽然代码长，但比用数组存储 P1, P2 更快，因为直接操作寄存器
+        
+        # 优化技巧：我们在 if 分支里直接读取 LUT 并计算，避免不必要的内存读取
+        
+        if dx >= dy:
+            if dy >= dz:
+                # Case 1: dx >= dy >= dz
+                # P1=(1,0,0), P2=(1,1,0)
+                # Weights: (1-dx), (dx-dy), (dy-dz), dz
+                
+                # P0
+                w0 = 1.0 - dx
+                c_r = lut_table[x0, y0, z0, 0] * w0
+                c_g = lut_table[x0, y0, z0, 1] * w0
+                c_b = lut_table[x0, y0, z0, 2] * w0
+                
+                # P1 (x+1, y, z)
+                w1 = dx - dy
+                c_r += lut_table[x1, y0, z0, 0] * w1
+                c_g += lut_table[x1, y0, z0, 1] * w1
+                c_b += lut_table[x1, y0, z0, 2] * w1
+                
+                # P2 (x+1, y+1, z)
+                w2 = dy - dz
+                c_r += lut_table[x1, y1, z0, 0] * w2
+                c_g += lut_table[x1, y1, z0, 1] * w2
+                c_b += lut_table[x1, y1, z0, 2] * w2
+                
+                # P3 (x+1, y+1, z+1) -> Weight is dz
+                c_r += lut_table[x1, y1, z1, 0] * dz
+                c_g += lut_table[x1, y1, z1, 1] * dz
+                c_b += lut_table[x1, y1, z1, 2] * dz
+
+                r_val, g_val, b_val = c_r, c_g, c_b
+
+            elif dx >= dz:
+                # Case 2: dx >= dz > dy
+                # P1=(1,0,0), P2=(1,0,1)
+                # Weights: (1-dx), (dx-dz), (dz-dy), dy
+                
+                w0 = 1.0 - dx
+                c_r = lut_table[x0, y0, z0, 0] * w0
+                c_g = lut_table[x0, y0, z0, 1] * w0
+                c_b = lut_table[x0, y0, z0, 2] * w0
+                
+                w1 = dx - dz
+                c_r += lut_table[x1, y0, z0, 0] * w1
+                c_g += lut_table[x1, y0, z0, 1] * w1
+                c_b += lut_table[x1, y0, z0, 2] * w1
+                
+                w2 = dz - dy
+                c_r += lut_table[x1, y0, z1, 0] * w2
+                c_g += lut_table[x1, y0, z1, 1] * w2
+                c_b += lut_table[x1, y0, z1, 2] * w2
+                
+                c_r += lut_table[x1, y1, z1, 0] * dy
+                c_g += lut_table[x1, y1, z1, 1] * dy
+                c_b += lut_table[x1, y1, z1, 2] * dy
+                
+                r_val, g_val, b_val = c_r, c_g, c_b
+                
+            else:
+                # Case 3: dz > dx >= dy
+                # P1=(0,0,1), P2=(1,0,1)
+                # Weights: (1-dz), (dz-dx), (dx-dy), dy
+                
+                w0 = 1.0 - dz
+                c_r = lut_table[x0, y0, z0, 0] * w0
+                c_g = lut_table[x0, y0, z0, 1] * w0
+                c_b = lut_table[x0, y0, z0, 2] * w0
+                
+                w1 = dz - dx
+                c_r += lut_table[x0, y0, z1, 0] * w1
+                c_g += lut_table[x0, y0, z1, 1] * w1
+                c_b += lut_table[x0, y0, z1, 2] * w1
+                
+                w2 = dx - dy
+                c_r += lut_table[x1, y0, z1, 0] * w2
+                c_g += lut_table[x1, y0, z1, 1] * w2
+                c_b += lut_table[x1, y0, z1, 2] * w2
+                
+                c_r += lut_table[x1, y1, z1, 0] * dy
+                c_g += lut_table[x1, y1, z1, 1] * dy
+                c_b += lut_table[x1, y1, z1, 2] * dy
+
+                r_val, g_val, b_val = c_r, c_g, c_b
+
+        else: # dy > dx
+            if dz >= dy:
+                # Case 6: dz > dy > dx
+                # P1=(0,0,1), P2=(0,1,1)
+                # Weights: (1-dz), (dz-dy), (dy-dx), dx
+                
+                w0 = 1.0 - dz
+                c_r = lut_table[x0, y0, z0, 0] * w0
+                c_g = lut_table[x0, y0, z0, 1] * w0
+                c_b = lut_table[x0, y0, z0, 2] * w0
+                
+                w1 = dz - dy
+                c_r += lut_table[x0, y0, z1, 0] * w1
+                c_g += lut_table[x0, y0, z1, 1] * w1
+                c_b += lut_table[x0, y0, z1, 2] * w1
+                
+                w2 = dy - dx
+                c_r += lut_table[x0, y1, z1, 0] * w2
+                c_g += lut_table[x0, y1, z1, 1] * w2
+                c_b += lut_table[x0, y1, z1, 2] * w2
+                
+                c_r += lut_table[x1, y1, z1, 0] * dx
+                c_g += lut_table[x1, y1, z1, 1] * dx
+                c_b += lut_table[x1, y1, z1, 2] * dx
+                
+                r_val, g_val, b_val = c_r, c_g, c_b
+
+            elif dz >= dx:
+                # Case 5: dy >= dz > dx
+                # P1=(0,1,0), P2=(0,1,1)
+                # Weights: (1-dy), (dy-dz), (dz-dx), dx
+                
+                w0 = 1.0 - dy
+                c_r = lut_table[x0, y0, z0, 0] * w0
+                c_g = lut_table[x0, y0, z0, 1] * w0
+                c_b = lut_table[x0, y0, z0, 2] * w0
+                
+                w1 = dy - dz
+                c_r += lut_table[x0, y1, z0, 0] * w1
+                c_g += lut_table[x0, y1, z0, 1] * w1
+                c_b += lut_table[x0, y1, z0, 2] * w1
+                
+                w2 = dz - dx
+                c_r += lut_table[x0, y1, z1, 0] * w2
+                c_g += lut_table[x0, y1, z1, 1] * w2
+                c_b += lut_table[x0, y1, z1, 2] * w2
+                
+                c_r += lut_table[x1, y1, z1, 0] * dx
+                c_g += lut_table[x1, y1, z1, 1] * dx
+                c_b += lut_table[x1, y1, z1, 2] * dx
+                
+                r_val, g_val, b_val = c_r, c_g, c_b
+
+            else:
+                # Case 4: dy > dx >= dz
+                # P1=(0,1,0), P2=(1,1,0)
+                # Weights: (1-dy), (dy-dx), (dx-dz), dz
+                
+                w0 = 1.0 - dy
+                c_r = lut_table[x0, y0, z0, 0] * w0
+                c_g = lut_table[x0, y0, z0, 1] * w0
+                c_b = lut_table[x0, y0, z0, 2] * w0
+                
+                w1 = dy - dx
+                c_r += lut_table[x0, y1, z0, 0] * w1
+                c_g += lut_table[x0, y1, z0, 1] * w1
+                c_b += lut_table[x0, y1, z0, 2] * w1
+                
+                w2 = dx - dz
+                c_r += lut_table[x1, y1, z0, 0] * w2
+                c_g += lut_table[x1, y1, z0, 1] * w2
+                c_b += lut_table[x1, y1, z0, 2] * w2
+                
+                c_r += lut_table[x1, y1, z1, 0] * dz
+                c_g += lut_table[x1, y1, z1, 1] * dz
+                c_b += lut_table[x1, y1, z1, 2] * dz
+
+                r_val, g_val, b_val = c_r, c_g, c_b
+
+        # 写入最终结果
+        flat_img[i, 0] = r_val
+        flat_img[i, 1] = g_val
+        flat_img[i, 2] = b_val
 
 @njit(parallel=True, fastmath=True)
 def apply_saturation_contrast_inplace(img, saturation, contrast, pivot, luma_coeffs):
