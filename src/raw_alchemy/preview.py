@@ -139,7 +139,8 @@ class PreviewWindow:
         """设置参数监听，当主界面参数变化时自动刷新预览"""
         # 监听所有相关参数的变化
         self.gui_app.log_space_var.trace_add("write", self.on_param_change)
-        self.gui_app.lut_path_var.trace_add("write", self.on_param_change)
+        self.gui_app.lut_folder_var.trace_add("write", self.on_param_change)
+        self.gui_app.lut_file_var.trace_add("write", self.on_param_change)
         self.gui_app.exposure_mode_var.trace_add("write", self.on_param_change)
         self.gui_app.exposure_stops_var.trace_add("write", self.on_param_change)
         self.gui_app.metering_mode_var.trace_add("write", self.on_param_change)
@@ -255,7 +256,7 @@ class PreviewWindow:
         """从主界面获取当前参数"""
         params = {
             'log_space': self.gui_app.log_space_var.get(),
-            'lut_path': self.gui_app.lut_path_var.get() or None,
+            'lut_path': self.gui_app.get_selected_lut_path(),
             'lens_correct': self.gui_app.lens_correction_var.get(),
             'custom_db_path': self.gui_app.custom_lensfun_db_path_var.get() or None,
         }

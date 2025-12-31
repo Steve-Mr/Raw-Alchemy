@@ -86,16 +86,23 @@ class GuiApplication(tk.Frame):
         self.log_space_var = tk.StringVar(value=list(config.LOG_TO_WORKING_SPACE.keys())[0])
         ttk.OptionMenu(settings_frame, self.log_space_var, self.log_space_var.get(), *config.LOG_TO_WORKING_SPACE.keys()).grid(row=0, column=1, sticky="w", padx=5)
 
-        # Row 1: LUT
-        ttk.Label(settings_frame, text="LUT (.cube):").grid(row=1, column=0, sticky="w", pady=5)
-        self.lut_path_var = tk.StringVar()
-        ttk.Entry(settings_frame, textvariable=self.lut_path_var).grid(row=1, column=1, columnspan=2, sticky="ew", padx=5)
-        ttk.Button(settings_frame, text="Browse...", command=self.browse_lut).grid(row=1, column=3, sticky="ew", padx=5)
+        # Row 1: LUT Folder
+        ttk.Label(settings_frame, text="LUT Folder:").grid(row=1, column=0, sticky="w", pady=5)
+        self.lut_folder_var = tk.StringVar()
+        ttk.Entry(settings_frame, textvariable=self.lut_folder_var).grid(row=1, column=1, columnspan=2, sticky="ew", padx=5)
+        ttk.Button(settings_frame, text="Browse...", command=self.browse_lut_folder).grid(row=1, column=3, sticky="ew", padx=5)
+        
+        # Row 1.5: LUT Selection
+        ttk.Label(settings_frame, text="Select LUT:").grid(row=2, column=0, sticky="w", pady=5)
+        self.lut_file_var = tk.StringVar()
+        self.lut_dropdown = ttk.Combobox(settings_frame, textvariable=self.lut_file_var, state="readonly")
+        self.lut_dropdown.grid(row=2, column=1, columnspan=3, sticky="ew", padx=5)
+        self.lut_dropdown['values'] = []
 
-        # Row 2: CPU Jobs
-        ttk.Label(settings_frame, text="CPU Threads:").grid(row=2, column=0, sticky="w", pady=5)
+        # Row 3: CPU Jobs
+        ttk.Label(settings_frame, text="CPU Threads:").grid(row=3, column=0, sticky="w", pady=5)
         self.jobs_var = tk.IntVar(value=min(4, multiprocessing.cpu_count()))
-        ttk.Spinbox(settings_frame, from_=1, to=multiprocessing.cpu_count(), textvariable=self.jobs_var, width=5).grid(row=2, column=1, sticky="w", padx=5)
+        ttk.Spinbox(settings_frame, from_=1, to=multiprocessing.cpu_count(), textvariable=self.jobs_var, width=5).grid(row=3, column=1, sticky="w", padx=5)
 
         settings_frame.columnconfigure(1, weight=1)
         settings_frame.columnconfigure(2, weight=1)
@@ -238,10 +245,49 @@ class GuiApplication(tk.Frame):
         path = filedialog.askdirectory()
         if path: self.output_path_var.set(path)
 
-    def browse_lut(self):
-        path = filedialog.askopenfilename(filetypes=[("LUT files", "*.cube")])
-        if path: self.lut_path_var.set(path)
+    def browse_lut_folder(self):
+        """选择LUT文件夹并扫描其中的.cube文件"""
+        path = filedialog.askdirectory(title="Select LUT Folder")
+        if path:
+            self.lut_folder_var.set(path)
+            self.scan_lut_files(path)
+    
+    def scan_lut_files(self, folder_path):
+        """扫描文件夹中的所有.cube文件并更新下拉框"""
+        try:
+            # 获取文件夹中所有.cube文件
+            lut_files = []
+            if os.path.isdir(folder_path):
+                for file in os.listdir(folder_path):
+                    if file.lower().endswith('.cube'):
+                        lut_files.append(file)
+            
+            # 按文件名排序
+            lut_files.sort()
+            
+            # 更新下拉框
+            self.lut_dropdown['values'] = lut_files
+            
+            # 如果有LUT文件，默认选择第一个
+            if lut_files:
+                self.lut_file_var.set(lut_files[0])
+            else:
+                self.lut_file_var.set('')
+                messagebox.showinfo("Info", "No .cube files found in the selected folder.")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to scan LUT folder: {e}")
 
+    def get_selected_lut_path(self):
+        """获取当前选择的LUT文件的完整路径"""
+        folder = self.lut_folder_var.get()
+        lut_file = self.lut_file_var.get()
+        
+        if folder and lut_file:
+            full_path = os.path.join(folder, lut_file)
+            if os.path.isfile(full_path):
+                return full_path
+        return None
+    
     def browse_lensfun_db(self):
         path = filedialog.askopenfilename(filetypes=[("Lensfun XML", "*.xml")])
         if path: self.custom_lensfun_db_path_var.set(path)
@@ -348,7 +394,7 @@ class GuiApplication(tk.Frame):
             'output_path': self.output_path_var.get(),
             'log_space': self.log_space_var.get(),
             'output_format': self.output_format_var.get(),
-            'lut_path': self.lut_path_var.get() or None,
+            'lut_path': self.get_selected_lut_path(),
             'custom_db_path': self.custom_lensfun_db_path_var.get() or None,
             'jobs': self.jobs_var.get(),
             'lens_correct': self.lens_correction_var.get()
