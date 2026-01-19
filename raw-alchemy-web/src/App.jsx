@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react'
 import RawUploader from './components/RawUploader';
 import WebGLStatus from './components/WebGLStatus';
 
