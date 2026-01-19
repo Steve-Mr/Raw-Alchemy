@@ -8,9 +8,31 @@ const RawUploader = () => {
   const [mode, setMode] = useState('rgb'); // 'rgb' or 'bayer'
 
   const workerRef = useRef(null);
+  const [selectedFile, setSelectedFile] = useState(null);
 
+  // Terminate worker on component unmount
   useEffect(() => {
-    // Initialize Web Worker
+    return () => {
+      workerRef.current?.terminate();
+    };
+  }, []);
+
+  const handleProcess = async (fileToProcess, selectedMode) => {
+    if (!fileToProcess) return;
+
+    setLoading(true);
+    setError(null);
+    setImageState(null); // Clear previous image state to unmount GLCanvas
+
+    // 1. Terminate old worker (Reset Engine)
+    if (workerRef.current) {
+        workerRef.current.terminate();
+        workerRef.current = null;
+    }
+
+    // 2. Create new worker
+    // Using a fresh worker for every file guarantees a clean WASM memory state.
+    // This fixes issues with corrupted output on subsequent loads.
     workerRef.current = new Worker(new URL('../workers/raw.worker.js', import.meta.url), { type: 'module' });
 
     workerRef.current.onmessage = (e) => {
@@ -32,19 +54,13 @@ const RawUploader = () => {
       }
     };
 
-    return () => {
-      workerRef.current?.terminate();
+    workerRef.current.onerror = (err) => {
+        console.error("Worker Crash:", err);
+        setError("Worker failed (Check console). The operation might have crashed.");
+        setLoading(false);
     };
-  }, []);
 
-  const handleProcess = async (fileToProcess, selectedMode) => {
-    if (!fileToProcess) return;
-
-    setLoading(true);
-    setError(null);
-    setImageState(null);
-
-    // We need to read the buffer here to transfer it to the worker
+    // 3. Process File
     try {
       const buffer = await fileToProcess.arrayBuffer();
 
@@ -60,8 +76,6 @@ const RawUploader = () => {
       setLoading(false);
     }
   };
-
-  const [selectedFile, setSelectedFile] = useState(null);
 
   const handleFileSelect = (e) => {
     if (e.target.files[0]) {
