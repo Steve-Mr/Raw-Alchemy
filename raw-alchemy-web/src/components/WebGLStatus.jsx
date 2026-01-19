@@ -8,27 +8,29 @@ const WebGLStatus = () => {
   });
 
   useEffect(() => {
-    const canvas = document.createElement('canvas');
-    const gl = canvas.getContext('webgl2');
+    // Wrap in setTimeout to avoid sync setStatus warning
+    setTimeout(() => {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl2');
 
-    if (!gl) {
-      setStatus(s => ({ ...s, webgl2: false }));
-      return;
-    }
+        if (!gl) {
+        setStatus(s => ({ ...s, webgl2: false }));
+        return;
+        }
 
-    const extColorBufferFloat = gl.getExtension('EXT_color_buffer_float');
-    const extFloatLinear = gl.getExtension('OES_texture_float_linear');
+        const extColorBufferFloat = gl.getExtension('EXT_color_buffer_float');
+        const extFloatLinear = gl.getExtension('OES_texture_float_linear');
 
-    setStatus({
-      webgl2: true,
-      floatTexture: !!extColorBufferFloat,
-      linearFloat: !!extFloatLinear
-    });
+        setStatus({
+        webgl2: true,
+        floatTexture: !!extColorBufferFloat,
+        linearFloat: !!extFloatLinear
+        });
 
-    // Cleanup
-    const loseContext = gl.getExtension('WEBGL_lose_context');
-    if (loseContext) loseContext.loseContext();
-
+        // Cleanup
+        const loseContext = gl.getExtension('WEBGL_lose_context');
+        if (loseContext) loseContext.loseContext();
+    }, 0);
   }, []);
 
   return (
