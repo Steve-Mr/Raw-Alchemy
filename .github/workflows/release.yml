@@ -27,7 +27,10 @@ jobs:
           apt-get install -y wget build-essential libssl-dev zlib1g-dev \
             libbz2-dev libreadline-dev libsqlite3-dev curl llvm \
             libncurses5-dev libncursesw5-dev xz-utils tk-dev libffi-dev \
-            liblzma-dev git pkg-config
+            liblzma-dev git pkg-config libraw-dev
+          echo "Compiler versions:"
+          gcc --version
+          g++ --version
 
       - name: Build and Install Python 3.12
         run: |
@@ -44,6 +47,8 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip setuptools wheel
           python3 -m pip install cython numpy
+          # Install rawpy separately with verbose output to debug build failures
+          python3 -m pip install -v -v git+https://github.com/shenmintao/rawpy.git
           pip3 install .
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
