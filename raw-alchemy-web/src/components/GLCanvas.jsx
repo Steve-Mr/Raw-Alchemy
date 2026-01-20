@@ -358,6 +358,22 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
         // --- STAGE 2: To Working Space (ProPhoto RGB) ---
         vec3 prophoto_linear = u_cam_to_prophoto * wb_cam;
 
+        // --- STAGE 2.5: Camera Match Boost (Sat & Contrast) ---
+        // Mimics raw_alchemy/utils.py apply_saturation_and_contrast
+        // Default Sat: 1.25, Contrast: 1.1, Pivot: 0.18
+        // Luma Coeffs for ProPhoto RGB: 0.288040, 0.711874, 0.000086
+        const vec3 proPhotoLuma = vec3(0.288040, 0.711874, 0.000086);
+        float luma = dot(prophoto_linear, proPhotoLuma);
+
+        // Saturation (1.25)
+        prophoto_linear = mix(vec3(luma), prophoto_linear, 1.25);
+
+        // Contrast (1.1, Pivot 0.18)
+        prophoto_linear = (prophoto_linear - 0.18) * 1.1 + 0.18;
+
+        // Clip negatives (utils.py does this at the end of boost)
+        prophoto_linear = max(prophoto_linear, 0.0);
+
         // --- STAGE 3: To Target Gamut (Linear) ---
         vec3 target_linear = u_prophoto_to_target * prophoto_linear;
 
