@@ -1,0 +1,10 @@
+
+> raw-alchemy-web@0.0.0 dev
+> vite --port 3000
+
+
+  VITE v7.3.1  ready in 278 ms
+
+  ➜  Local:   http://localhost:3000/
+  ➜  Network: use --host to expose
+7:52:39 AM [vite] (client) hmr update /src/components/RawUploader.jsx, /src/index.css

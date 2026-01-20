@@ -1,12 +1,13 @@
 import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 
-const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType }, ref) => {
+const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, lutData, lutSize, lutEnabled }, ref) => {
   const canvasRef = useRef(null);
 
   // Persist GL resources across renders
   const glRef = useRef(null);
   const programRef = useRef(null);
   const textureRef = useRef(null);
+  const lutTextureRef = useRef(null);
   const vaoRef = useRef(null);
 
   // Expose method to capture high-res data
@@ -16,6 +17,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
       const program = programRef.current;
       const texture = textureRef.current;
       const vao = vaoRef.current;
+      // Note: We also need the lutTexture if it exists, but we bind it via state
 
       if (!gl || !program || !texture || !vao) {
           throw new Error("WebGL context or resources not initialized");
@@ -52,7 +54,13 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
 
       // Bind Input Texture (Source Raw Data)
       gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, texture); // The input raw texture
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+
+      // Bind LUT Texture if available
+      if (lutTextureRef.current && lutEnabled) {
+          gl.activeTexture(gl.TEXTURE1);
+          gl.bindTexture(gl.TEXTURE_3D, lutTextureRef.current);
+      }
 
       // Update Uniforms (Ensure they match current props)
       gl.uniform1f(gl.getUniformLocation(program, 'u_maxVal'), bitDepth === 16 ? 65535.0 : 255.0);
@@ -67,6 +75,11 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
       gl.uniformMatrix3fv(gl.getUniformLocation(program, 'u_prophoto_to_target'), true, proPhotoToTargetMatrix || identity);
       gl.uniform1i(gl.getUniformLocation(program, 'u_log_curve_type'), logCurveType !== undefined ? logCurveType : 0);
 
+      // LUT Uniforms
+      gl.uniform1i(gl.getUniformLocation(program, 'u_lut_enabled'), lutEnabled ? 1 : 0);
+      gl.uniform1i(gl.getUniformLocation(program, 'u_lut'), 1);
+      gl.uniform1f(gl.getUniformLocation(program, 'u_lut_size'), lutSize || 17.0);
+
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
       // 4. Read Pixels (Float32)
@@ -78,15 +91,6 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.deleteFramebuffer(fb);
       gl.deleteTexture(targetTex);
-
-      // 6. Convert RGBA -> RGB (Strip Alpha)
-      // We do this here or in worker? Doing it in worker saves main thread time.
-      // But we are passing Float32Array to worker anyway.
-      // Let's optimize transfer: Strip Alpha here? Or just send RGBA and let worker stride?
-      // Sending 33% extra data (Alpha) is okay for memory vs CPU on main thread.
-      // Wait, 16-bit TIFF expects RGB.
-      // Let's strip here to save Transferable size? No, `readPixels` is the bottleneck.
-      // Let's send the RGBA buffer and tell worker to skip 4th channel.
 
       return {
           width,
@@ -118,6 +122,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
 
     // Enable extensions
     gl.getExtension('EXT_color_buffer_float');
+    gl.getExtension('OES_texture_float_linear'); // For float texture filtering
 
     // --- SHADERS ---
     const vsSource = `#version 300 es
@@ -133,6 +138,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
     const fsSource = `#version 300 es
       precision highp float;
       precision highp usampler2D;
+      precision mediump sampler3D;
 
       in vec2 v_texCoord;
       uniform usampler2D u_image;
@@ -148,6 +154,11 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
 
       // Stage 4: Log Curve Selection
       uniform int u_log_curve_type;
+
+      // Stage 5: LUT Application
+      uniform bool u_lut_enabled;
+      uniform sampler3D u_lut;
+      uniform float u_lut_size;
 
       out vec4 outColor;
 
@@ -310,6 +321,13 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
           return res;
       }
 
+      vec3 apply3DLUT(vec3 color) {
+        // Half-texel correction for LUT sampling
+        // Scale input range [0, 1] to [0.5/size, 1 - 0.5/size]
+        vec3 uvw = color * ((u_lut_size - 1.0) / u_lut_size) + (0.5 / u_lut_size);
+        return texture(u_lut, uvw).rgb;
+      }
+
       void main() {
         uvec4 rawVal = texture(u_image, v_texCoord);
 
@@ -339,6 +357,12 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
         // --- STAGE 4: To Target Log Curve ---
         vec3 log_image = applyLogCurve(target_linear, u_log_curve_type);
 
+        // --- STAGE 5: 3D LUT Application ---
+        if (u_lut_enabled) {
+            // Apply LUT
+            log_image = apply3DLUT(log_image);
+        }
+
         outColor = vec4(log_image, 1.0);
       }
     `;
@@ -349,6 +373,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
     let positionBuffer = null;
     let vao = null;
     let texture = null;
+    let lutTexture = null;
 
     try {
         const createShader = (type, source) => {
@@ -393,7 +418,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
 
         vaoRef.current = vao;
 
-        // --- TEXTURE ---
+        // --- TEXTURE 0: Input Image ---
         texture = gl.createTexture();
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -431,6 +456,37 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
 
         textureRef.current = texture;
 
+        // --- TEXTURE 1: 3D LUT ---
+        if (lutData && lutSize > 0) {
+            lutTexture = gl.createTexture();
+            gl.activeTexture(gl.TEXTURE1);
+            gl.bindTexture(gl.TEXTURE_3D, lutTexture);
+
+            // Use RGB32F for LUTs (High Precision Floating Point)
+            gl.texImage3D(
+                gl.TEXTURE_3D,
+                0,
+                gl.RGB32F,
+                lutSize, lutSize, lutSize,
+                0,
+                gl.RGB,
+                gl.FLOAT,
+                lutData
+            );
+
+            // Important: Enable Linear Interpolation for LUTs
+            gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+
+            lutTextureRef.current = lutTexture;
+        } else {
+            lutTextureRef.current = null;
+        }
+
+
         // --- RENDER ---
         gl.viewport(0, 0, width, height);
         gl.useProgram(program);
@@ -451,6 +507,11 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
         // Log Curve Type (Default to 0: Arri LogC3)
         gl.uniform1i(gl.getUniformLocation(program, 'u_log_curve_type'), logCurveType !== undefined ? logCurveType : 0);
 
+        // LUT Uniforms
+        gl.uniform1i(gl.getUniformLocation(program, 'u_lut_enabled'), (lutEnabled && lutTexture) ? 1 : 0);
+        gl.uniform1i(gl.getUniformLocation(program, 'u_lut'), 1); // Texture Unit 1
+        gl.uniform1f(gl.getUniformLocation(program, 'u_lut_size'), lutSize || 17.0);
+
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
     } catch (e) {
@@ -460,6 +521,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
     // --- CLEANUP ---
     return () => {
         if (texture) gl.deleteTexture(texture);
+        if (lutTexture) gl.deleteTexture(lutTexture);
         if (program) gl.deleteProgram(program);
         if (vs) gl.deleteShader(vs);
         if (fs) gl.deleteShader(fs);
@@ -469,10 +531,11 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
         glRef.current = null;
         programRef.current = null;
         textureRef.current = null;
+        lutTextureRef.current = null;
         vaoRef.current = null;
     };
 
-  }, [width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType]);
+  }, [width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, lutData, lutSize, lutEnabled]);
 
   return <canvas ref={canvasRef} className="max-w-full shadow-lg border border-gray-300" />;
 });

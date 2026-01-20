@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import GLCanvas from './GLCanvas';
 import { calculateCamToProPhoto, getProPhotoToTargetMatrix, formatMatrixForUniform, LOG_SPACE_CONFIG } from '../utils/colorMath';
+import { parseCubeLUT } from '../utils/lutParser';
 
 const RawUploader = () => {
   const [loading, setLoading] = useState(false);
@@ -17,6 +18,12 @@ const RawUploader = () => {
   const [camToProPhotoMat, setCamToProPhotoMat] = useState(null);
   const [proPhotoToTargetMat, setProPhotoToTargetMat] = useState(null);
   const [targetLogSpace, setTargetLogSpace] = useState('Arri LogC3');
+
+  // LUT State
+  const [lutData, setLutData] = useState(null); // Float32Array
+  const [lutSize, setLutSize] = useState(0);
+  const [lutName, setLutName] = useState(null);
+  const [lutEnabled, setLutEnabled] = useState(false);
 
   const [exporting, setExporting] = useState(false);
   const glCanvasRef = useRef(null);
@@ -123,6 +130,35 @@ const RawUploader = () => {
       setError("Failed to read file: " + err.message);
       setLoading(false);
     }
+  };
+
+  const handleLutLoad = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        try {
+            const content = ev.target.result;
+            const { title, size, data } = parseCubeLUT(content);
+            setLutData(data);
+            setLutSize(size);
+            setLutName(title || file.name);
+            setLutEnabled(true);
+            setError(null);
+        } catch (err) {
+            console.error("LUT Parsing Error:", err);
+            setError("Failed to load LUT: " + err.message);
+        }
+    };
+    reader.readAsText(file);
+  };
+
+  const clearLut = () => {
+      setLutData(null);
+      setLutSize(0);
+      setLutName(null);
+      setLutEnabled(false);
   };
 
   const handleExport = () => {
@@ -304,6 +340,40 @@ const RawUploader = () => {
                           </select>
                       </div>
 
+                       {/* LUT Integration */}
+                       <div className="mb-4 pt-4 border-t border-gray-300">
+                          <h4 className="text-sm font-semibold text-gray-600 mb-2">3D LUT Application</h4>
+                          <div className="space-y-2">
+                              {!lutData ? (
+                                  <label className="block text-xs text-gray-500">
+                                      Load .cube File:
+                                      <input
+                                          type="file"
+                                          accept=".cube"
+                                          onChange={handleLutLoad}
+                                          className="block w-full mt-1 text-xs"
+                                      />
+                                  </label>
+                              ) : (
+                                  <div className="bg-blue-50 p-2 rounded border border-blue-200">
+                                      <div className="flex justify-between items-center mb-1">
+                                          <span className="text-xs font-bold text-blue-800 truncate" title={lutName}>{lutName}</span>
+                                          <button onClick={clearLut} className="text-xs text-red-500 hover:text-red-700 font-bold ml-2">X</button>
+                                      </div>
+                                      <label className="flex items-center space-x-2 cursor-pointer">
+                                          <input
+                                              type="checkbox"
+                                              checked={!lutEnabled}
+                                              onChange={() => setLutEnabled(!lutEnabled)}
+                                              className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4"
+                                          />
+                                          <span className="text-xs text-gray-700 font-medium">Bypass LUT</span>
+                                      </label>
+                                  </div>
+                              )}
+                          </div>
+                       </div>
+
                       {/* Export Button */}
                       <button
                           onClick={handleExport}
@@ -379,10 +449,13 @@ const RawUploader = () => {
                     camToProPhotoMatrix={camToProPhotoMat}
                     proPhotoToTargetMatrix={proPhotoToTargetMat}
                     logCurveType={LOG_SPACE_CONFIG[targetLogSpace] ? LOG_SPACE_CONFIG[targetLogSpace].id : 0}
+                    lutData={lutData}
+                    lutSize={lutSize}
+                    lutEnabled={lutEnabled}
                 />
             </div>
             <p className="text-xs text-gray-500 text-center">
-                * Displaying: {targetLogSpace} | Pipeline: RAW &rarr; WB &rarr; Cam2ProPhoto &rarr; ProPhoto2Target &rarr; {targetLogSpace} Curve
+                * Displaying: {targetLogSpace} | Pipeline: RAW &rarr; WB &rarr; Cam2ProPhoto &rarr; ProPhoto2Target &rarr; {targetLogSpace} Curve {lutEnabled ? '→ 3D LUT' : ''}
             </p>
         </div>
       )}
