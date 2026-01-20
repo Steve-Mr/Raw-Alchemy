@@ -27,10 +27,23 @@ jobs:
           apt-get install -y wget build-essential libssl-dev zlib1g-dev \
             libbz2-dev libreadline-dev libsqlite3-dev curl llvm \
             libncurses5-dev libncursesw5-dev xz-utils tk-dev libffi-dev \
-            liblzma-dev git pkg-config libraw-dev
+            liblzma-dev git pkg-config autoconf automake libtool
           echo "Compiler versions:"
           gcc --version
           g++ --version
+
+      - name: Build and Install LibRaw 0.21.2
+        run: |
+          git clone https://github.com/LibRaw/LibRaw.git
+          cd LibRaw
+          git checkout 0.21.2
+          autoreconf -i
+          ./configure --prefix=/usr/local --disable-examples
+          make -j$(nproc)
+          make install
+          cd ..
+          rm -rf LibRaw
+          ldconfig
 
       - name: Build and Install Python 3.12
         run: |
