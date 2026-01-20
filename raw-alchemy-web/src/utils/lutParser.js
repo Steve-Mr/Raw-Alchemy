@@ -2,7 +2,7 @@
 export function parseCubeLUT(content) {
   const lines = content.split(/\r?\n/);
   let size = 0;
-  let title = "Untitled LUT";
+  let title = null;
   const data = [];
   let readingData = false;
 

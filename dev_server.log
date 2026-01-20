@@ -8,3 +8,5 @@
   ➜  Local:   http://localhost:3000/
   ➜  Network: use --host to expose
 7:52:39 AM [vite] (client) hmr update /src/components/RawUploader.jsx, /src/index.css
+8:07:24 AM [vite] (client) hmr update /src/index.css, /src/components/RawUploader.jsx
+8:08:28 AM [vite] (client) hmr update /src/index.css, /src/components/GLCanvas.jsx

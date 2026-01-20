@@ -323,8 +323,18 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
 
       vec3 apply3DLUT(vec3 color) {
         // Half-texel correction for LUT sampling
+        // Adobe Cube LUT format has Blue channel changing fastest (corresponds to Texture X-axis),
+        // then Green (Y-axis), then Red (Z-axis).
+        // Standard texture coordinates are (s, t, p) corresponding to (x, y, z).
+        // So we need to map:
+        // Input Blue  -> Texture X (s)
+        // Input Green -> Texture Y (t)
+        // Input Red   -> Texture Z (p)
+
+        vec3 uvw_coords = vec3(color.b, color.g, color.r);
+
         // Scale input range [0, 1] to [0.5/size, 1 - 0.5/size]
-        vec3 uvw = color * ((u_lut_size - 1.0) / u_lut_size) + (0.5 / u_lut_size);
+        vec3 uvw = uvw_coords * ((u_lut_size - 1.0) / u_lut_size) + (0.5 / u_lut_size);
         return texture(u_lut, uvw).rgb;
       }
 
