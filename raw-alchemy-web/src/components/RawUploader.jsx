@@ -18,13 +18,17 @@ const RawUploader = () => {
   const [proPhotoToTargetMat, setProPhotoToTargetMat] = useState(null);
   const [targetLogSpace, setTargetLogSpace] = useState('Arri LogC3');
 
+  const [exporting, setExporting] = useState(false);
+  const glCanvasRef = useRef(null);
   const workerRef = useRef(null);
+  const exportWorkerRef = useRef(null);
   const [selectedFile, setSelectedFile] = useState(null);
 
-  // Terminate worker on component unmount
+  // Terminate workers on component unmount
   useEffect(() => {
     return () => {
       workerRef.current?.terminate();
+      exportWorkerRef.current?.terminate();
     };
   }, []);
 
@@ -119,6 +123,78 @@ const RawUploader = () => {
       setError("Failed to read file: " + err.message);
       setLoading(false);
     }
+  };
+
+  const handleExport = () => {
+      if (!imageState || !glCanvasRef.current) return;
+
+      setExporting(true);
+
+      // Allow UI to update (show spinner) before freezing main thread for readPixels
+      setTimeout(async () => {
+          try {
+              // 1. Capture High Res Float Data from WebGL
+              const result = glCanvasRef.current.captureHighRes();
+              if (!result) {
+                  throw new Error("Failed to capture WebGL data");
+              }
+
+              const { width, height, data } = result;
+
+              // 2. Initialize Export Worker
+              if (exportWorkerRef.current) {
+                  exportWorkerRef.current.terminate();
+              }
+              exportWorkerRef.current = new Worker(new URL('../workers/export.worker.js', import.meta.url), { type: 'module' });
+
+              exportWorkerRef.current.onmessage = (e) => {
+                  const { type, buffer, message } = e.data;
+                  if (type === 'success') {
+                      // 3. Trigger Download
+                      const blob = new Blob([buffer], { type: 'image/tiff' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      // Construct filename: OriginalName_LogSpace.tiff
+                      const originalName = selectedFile ? selectedFile.name.split('.').slice(0, -1).join('.') : 'output';
+                      const cleanLogName = targetLogSpace.replace(/\s+/g, '-');
+                      a.download = `${originalName}_${cleanLogName}.tiff`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+
+                      setExporting(false);
+                  } else {
+                      setError("Export failed: " + message);
+                      setExporting(false);
+                  }
+              };
+
+              exportWorkerRef.current.onerror = (err) => {
+                  console.error("Export Worker Error:", err);
+                  setError("Export Worker crashed.");
+                  setExporting(false);
+              };
+
+              // 3. Send to Worker (Transferable)
+              // We pass the raw RGBA Float32Array directly to the worker to avoid main thread freeze.
+              // We rely on Transferable objects for zero-copy.
+
+              exportWorkerRef.current.postMessage({
+                  width,
+                  height,
+                  data: data, // RGBA Float32Array
+                  channels: 4,
+                  logSpace: targetLogSpace // Pass the log space name to the worker
+              }, [data.buffer]);
+
+          } catch (err) {
+              console.error(err);
+              setError("Export Error: " + err.message);
+              setExporting(false);
+          }
+      }, 100);
   };
 
   const handleFileSelect = (e) => {
@@ -228,8 +304,19 @@ const RawUploader = () => {
                           </select>
                       </div>
 
+                      {/* Export Button */}
+                      <button
+                          onClick={handleExport}
+                          disabled={exporting}
+                          className={`w-full py-2 px-4 rounded font-bold text-white transition-colors
+                              ${exporting ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 shadow-md'}
+                          `}
+                      >
+                          {exporting ? 'Encoding TIFF...' : 'Export 16-bit TIFF'}
+                      </button>
+
                       {/* Metadata Debug */}
-                      <div className="text-xs font-mono text-gray-500 overflow-auto h-20 bg-gray-100 p-2 rounded">
+                      <div className="text-xs font-mono text-gray-500 overflow-auto h-20 bg-gray-100 p-2 rounded mt-4">
                           <strong>Metadata Extraction:</strong>
                           <pre>{metadata ? JSON.stringify({
                               cam_mul: metadata.cam_mul,
@@ -254,6 +341,20 @@ const RawUploader = () => {
         </div>
       )}
 
+      {/* Exporting Overlay Spinner */}
+      {exporting && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded shadow-xl flex flex-col items-center">
+                 <svg className="animate-spin h-8 w-8 text-green-600 mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span className="text-gray-800 font-semibold">Reading GPU Data & Encoding...</span>
+                <span className="text-xs text-gray-500 mt-1">This may take a moment.</span>
+            </div>
+        </div>
+      )}
+
       {error && <div className="p-3 bg-red-100 text-red-700 rounded mb-4">Error: {error}</div>}
 
       {imageState && (
@@ -268,6 +369,7 @@ const RawUploader = () => {
 
             <div className="border border-black bg-gray-900 flex justify-center overflow-auto" style={{ maxHeight: '70vh' }}>
                 <GLCanvas
+                    ref={glCanvasRef}
                     width={imageState.width}
                     height={imageState.height}
                     data={imageState.data}
