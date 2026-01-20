@@ -15,6 +15,9 @@ const RawUploader = () => {
   const [wbBlue, setWbBlue] = useState(1.0);
   const [wbGreen, setWbGreen] = useState(1.0); // Usually kept at 1.0 or derived
 
+  const [exposure, setExposure] = useState(0.0);
+  const [autoExposure, setAutoExposure] = useState(0.0);
+
   const [camToProPhotoMat, setCamToProPhotoMat] = useState(null);
   const [proPhotoToTargetMat, setProPhotoToTargetMat] = useState(null);
   const [targetLogSpace, setTargetLogSpace] = useState('Arri LogC3');
@@ -91,10 +94,20 @@ const RawUploader = () => {
     workerRef.current = new Worker(new URL('../workers/raw.worker.js', import.meta.url), { type: 'module' });
 
     workerRef.current.onmessage = (e) => {
-      const { type, data, width, height, channels, bitDepth, error: workerError, mode: resultMode, meta } = e.data;
+      const { type, data, width, height, channels, bitDepth, error: workerError, mode: resultMode, meta, calculatedExposure } = e.data;
 
       if (type === 'success') {
         setMetadata(meta); // Save metadata for pipeline
+
+        // Auto-Exposure Result
+        if (calculatedExposure !== undefined) {
+             console.log("Auto-Exposure Result:", calculatedExposure);
+             setAutoExposure(calculatedExposure);
+             setExposure(calculatedExposure); // Set initial exposure to auto
+        } else {
+             setExposure(0.0);
+        }
+
         setImageState({
           data,
           width,
@@ -288,36 +301,57 @@ const RawUploader = () => {
               <h3 className="text-md font-bold text-gray-700 mb-3">Color Pipeline Controls</h3>
 
               <div className="grid grid-cols-2 gap-6">
-                  {/* WB Controls */}
+                  {/* WB & Exposure Controls */}
                   <div>
-                      <h4 className="text-sm font-semibold text-gray-600 mb-2">White Balance (Multipliers)</h4>
-                      <div className="space-y-2">
-                          <div>
-                              <label className="block text-xs text-gray-500">Red Gain: {wbRed.toFixed(3)}</label>
+                      <h4 className="text-sm font-semibold text-gray-600 mb-2">Exposure & WB</h4>
+                      <div className="space-y-4">
+                           {/* Exposure */}
+                          <div className="bg-blue-50 p-2 rounded">
+                              <label className="block text-xs text-gray-700 font-bold">Exposure (EV): {exposure.toFixed(2)}</label>
                               <input
-                                  type="range" min="0.1" max="5.0" step="0.01"
-                                  value={wbRed}
-                                  onChange={(e) => setWbRed(parseFloat(e.target.value))}
+                                  type="range" min="-5.0" max="5.0" step="0.1"
+                                  value={exposure}
+                                  onChange={(e) => setExposure(parseFloat(e.target.value))}
                                   className="w-full"
                               />
+                              <div className="flex justify-between text-xs text-gray-400 mt-1">
+                                  <span onClick={() => setExposure(0.0)} className="cursor-pointer hover:text-blue-600">Reset (0)</span>
+                                  <span onClick={() => setExposure(autoExposure)} className="cursor-pointer hover:text-blue-600">Auto ({autoExposure.toFixed(2)})</span>
+                              </div>
                           </div>
+
+                          {/* WB */}
                           <div>
-                              <label className="block text-xs text-gray-500">Green Gain: {wbGreen.toFixed(3)} (Ref)</label>
-                              <input
-                                  type="range" min="0.1" max="5.0" step="0.01"
-                                  value={wbGreen}
-                                  onChange={(e) => setWbGreen(parseFloat(e.target.value))}
-                                  className="w-full"
-                              />
-                          </div>
-                          <div>
-                              <label className="block text-xs text-gray-500">Blue Gain: {wbBlue.toFixed(3)}</label>
-                              <input
-                                  type="range" min="0.1" max="5.0" step="0.01"
-                                  value={wbBlue}
-                                  onChange={(e) => setWbBlue(parseFloat(e.target.value))}
-                                  className="w-full"
-                              />
+                            <h5 className="text-xs font-semibold text-gray-500 mb-1">White Balance</h5>
+                            <div className="space-y-2">
+                                <div>
+                                    <label className="block text-xs text-gray-500">Red: {wbRed.toFixed(3)}</label>
+                                    <input
+                                        type="range" min="0.1" max="5.0" step="0.01"
+                                        value={wbRed}
+                                        onChange={(e) => setWbRed(parseFloat(e.target.value))}
+                                        className="w-full"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-gray-500">Green: {wbGreen.toFixed(3)}</label>
+                                    <input
+                                        type="range" min="0.1" max="5.0" step="0.01"
+                                        value={wbGreen}
+                                        onChange={(e) => setWbGreen(parseFloat(e.target.value))}
+                                        className="w-full"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-gray-500">Blue: {wbBlue.toFixed(3)}</label>
+                                    <input
+                                        type="range" min="0.1" max="5.0" step="0.01"
+                                        value={wbBlue}
+                                        onChange={(e) => setWbBlue(parseFloat(e.target.value))}
+                                        className="w-full"
+                                    />
+                                </div>
+                            </div>
                           </div>
                       </div>
                   </div>
@@ -446,6 +480,7 @@ const RawUploader = () => {
                     channels={imageState.channels}
                     bitDepth={imageState.bitDepth}
                     wbMultipliers={[wbRed, wbGreen, wbBlue]}
+                    exposure={exposure}
                     camToProPhotoMatrix={camToProPhotoMat}
                     proPhotoToTargetMatrix={proPhotoToTargetMat}
                     logCurveType={LOG_SPACE_CONFIG[targetLogSpace] ? LOG_SPACE_CONFIG[targetLogSpace].id : 0}

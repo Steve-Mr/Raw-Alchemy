@@ -9,9 +9,8 @@ self.onmessage = (e) => {
             throw new Error("No data received for export");
         }
 
-        // Input: 'data' is Float32Array
-        // If channels=4, it is RGBA.
-        // Output: Uint16Array (RGB only)
+        // Input: 'data' is Float32Array (RGBA or RGB)
+        // If coming from captureHighRes (readPixels), it is usually RGBA (4 channels).
 
         const pixelCount = width * height;
         const uint16Data = new Uint16Array(pixelCount * 3);
@@ -23,8 +22,8 @@ self.onmessage = (e) => {
             const sourceRow = height - 1 - y;
 
             // Calculate offsets
-            // Source is RGBA (4 channels) or RGB (3 channels) depending on input
-            const srcChannels = channels || 3;
+            // Source is RGBA (4 channels) from GL readPixels
+            const srcChannels = channels || 4;
             const sourceRowOffset = sourceRow * width * srcChannels;
 
             const targetRowOffset = y * width * 3;

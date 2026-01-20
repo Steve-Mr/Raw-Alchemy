@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 
-const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, lutData, lutSize, lutEnabled }, ref) => {
+const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultipliers, exposure, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, lutData, lutSize, lutEnabled }, ref) => {
   const canvasRef = useRef(null);
 
   // Persist GL resources across renders
@@ -66,6 +66,8 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
       gl.uniform1f(gl.getUniformLocation(program, 'u_maxVal'), bitDepth === 16 ? 65535.0 : 255.0);
       gl.uniform1i(gl.getUniformLocation(program, 'u_channels'), channels);
       gl.uniform1i(gl.getUniformLocation(program, 'u_image'), 0);
+
+      gl.uniform1f(gl.getUniformLocation(program, 'u_exposure'), exposure || 0.0);
 
       const wb = wbMultipliers || [1.0, 1.0, 1.0];
       gl.uniform3f(gl.getUniformLocation(program, 'u_wb_multipliers'), wb[0], wb[1], wb[2]);
@@ -144,6 +146,9 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
       uniform usampler2D u_image;
       uniform float u_maxVal;
       uniform int u_channels;
+
+      // Stage 0.5: Exposure
+      uniform float u_exposure;
 
       // Stage 1: WB
       uniform vec3 u_wb_multipliers;
@@ -323,15 +328,15 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
 
       vec3 apply3DLUT(vec3 color) {
         // Half-texel correction for LUT sampling
-        // Adobe Cube LUT format has Blue channel changing fastest (corresponds to Texture X-axis),
-        // then Green (Y-axis), then Red (Z-axis).
-        // Standard texture coordinates are (s, t, p) corresponding to (x, y, z).
-        // So we need to map:
-        // Input Blue  -> Texture X (s)
-        // Input Green -> Texture Y (t)
-        // Input Red   -> Texture Z (p)
+        // Standard Adobe Cube LUT format: Red iterates fastest (should map to X), then Green (Y), then Blue (Z).
+        // BUT, many implementations (including some legacy ones) swap this.
+        // If the LUT is R-Major (standard):
+        //   R changes fastest -> Texture X (s)
+        //   G changes mid     -> Texture Y (t)
+        //   B changes slowest -> Texture Z (p)
+        // So we sample with (r, g, b).
 
-        vec3 uvw_coords = vec3(color.b, color.g, color.r);
+        vec3 uvw_coords = vec3(color.r, color.g, color.b);
 
         // Scale input range [0, 1] to [0.5/size, 1 - 0.5/size]
         vec3 uvw = uvw_coords * ((u_lut_size - 1.0) / u_lut_size) + (0.5 / u_lut_size);
@@ -354,6 +359,11 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
 
         // --- STAGE 1: Input & WB (Camera Space) ---
         vec3 wb_cam = linear_cam * u_wb_multipliers;
+
+        // --- STAGE 1.5: Exposure (Linear Domain) ---
+        // Gain = 2^EV
+        float exposureGain = pow(2.0, u_exposure);
+        wb_cam *= exposureGain;
 
         // --- STAGE 2: To Working Space (ProPhoto RGB) ---
         vec3 prophoto_linear = u_cam_to_prophoto * wb_cam;
@@ -522,6 +532,8 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
         gl.uniform1i(gl.getUniformLocation(program, 'u_channels'), channels);
         gl.uniform1i(gl.getUniformLocation(program, 'u_image'), 0);
 
+        gl.uniform1f(gl.getUniformLocation(program, 'u_exposure'), exposure || 0.0);
+
         // Color Pipeline Uniforms
         const wb = wbMultipliers || [1.0, 1.0, 1.0];
         gl.uniform3f(gl.getUniformLocation(program, 'u_wb_multipliers'), wb[0], wb[1], wb[2]);
@@ -561,7 +573,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
         vaoRef.current = null;
     };
 
-  }, [width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, lutData, lutSize, lutEnabled]);
+  }, [width, height, data, channels, bitDepth, wbMultipliers, exposure, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, lutData, lutSize, lutEnabled]);
 
   return <canvas ref={canvasRef} className="max-w-full shadow-lg border border-gray-300" />;
 });
