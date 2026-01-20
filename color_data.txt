@@ -1,0 +1,458 @@
+=== GAMUT MATRICES (ProPhoto RGB -> Target) ===
+
+--- F-Gamut ---
+Matrix (Flat Row-Major): [1.202993, -0.065867, -0.137237, -0.067143, 1.072331, -0.005128, 0.004014, -0.025219, 1.020950]
+
+--- F-Gamut C ---
+Matrix (Flat Row-Major): [0.959089, 0.114254, -0.073433, -0.003432, 0.910793, 0.092660, 0.002179, 0.003073, 0.994501]
+
+--- S-Gamut3 ---
+Matrix (Flat Row-Major): [1.074478, -0.010574, -0.064015, -0.025097, 0.903955, 0.121158, 0.011779, -0.000835, 0.988810]
+
+--- S-Gamut3.Cine ---
+Matrix (Flat Row-Major): [1.255519, -0.172182, -0.083473, 0.005015, 0.844135, 0.150852, 0.037232, 0.018431, 0.944100]
+
+--- V-Gamut ---
+Matrix (Flat Row-Major): [1.118011, -0.049443, -0.068685, -0.026196, 0.930914, 0.095306, 0.011479, 0.006510, 0.981766]
+
+--- Cinema Gamut ---
+Matrix (Flat Row-Major): [1.057152, -0.023066, -0.034204, -0.004980, 0.844191, 0.160790, 0.008557, 0.151855, 0.839386]
+
+--- ITU-R BT.2020 ---
+Matrix (Flat Row-Major): [1.202993, -0.065867, -0.137237, -0.067143, 1.072331, -0.005128, 0.004014, -0.025219, 1.020950]
+
+--- DJI D-Gamut ---
+Matrix (Flat Row-Major): [1.189488, -0.118310, -0.071278, -0.079337, 0.919847, 0.159436, 0.014704, 0.065238, 0.920005]
+
+--- REDWideGamutRGB ---
+Matrix (Flat Row-Major): [1.021388, 0.027567, -0.049061, -0.018345, 0.861719, 0.156631, 0.051044, 0.201081, 0.747693]
+
+
+=== LOG CURVE DATA ===
+
+--- F-Log ---
+
+--- F-Log2 ---
+
+--- S-Log3 ---
+
+--- V-Log ---
+
+--- Canon Log 2 ---
+
+--- Canon Log 3 ---
+
+--- N-Log ---
+
+--- D-Log ---
+
+--- Log3G10 ---
+
+>>> Docstring for F-Log (log_encoding_FLog):
+
+    Apply the *Fujifilm F-Log* log encoding opto-electronic transfer function (OETF).
+
+    Parameters
+    ----------
+    in_r
+        Linear reflection data :math:`in`.
+    bit_depth
+        Bit-depth used for conversion.
+    out_normalised_code_value
+        Whether the *Fujifilm F-Log* non-linear data :math:`out` is encoded as
+        normalised code values.
+    in_reflection
+        Whether the light level :math:`in` to a camera is reflection.
+    constants
+        *Fujifilm F-Log* constants.
+
+    Returns
+    -------
+    :class:`numpy.ndarray`
+        *Fujifilm F-Log* non-linear encoded data :math:`out`.
+
+    Notes
+    -----
+    +------------+-----------------------+---------------+
+    | **Domain** | **Scale - Reference** | **Scale - 1** |
+    +============+=======================+===============+
+    | ``in_r``   | 1                     | 1             |
+    +------------+-----------------------+---------------+
+
+    +------------+-----------------------+---------------+
+    | **Range**  | **Scale - Reference** | **Scale - 1** |
+    +============+=======================+===============+
+    | ``out_r``  | 1                     | 1             |
+    +------------+-----------------------+---------------+
+
+    References
+    ----------
+    :cite:`Fujifilm2022`
+
+    Examples
+    --------
+    >>> log_encoding_FLog(0.18)  # doctest: +ELLIPSIS
+    0.4593184...
+
+    The values of *2-2. F-Log Code Value* table in :cite:`Fujifilm2022`
+    are obtained as follows:
+
+    >>> x = np.array([0, 18, 90]) / 100
+    >>> np.around(log_encoding_FLog(x, 10, False) * 100, 1)
+
+>>> Docstring for F-Log2 (log_encoding_FLog2):
+
+    Apply the *Fujifilm F-Log2* log encoding opto-electronic transfer function (OETF).
+
+    Parameters
+    ----------
+    in_r
+        Linear reflection data :math:`in`.
+    bit_depth
+        Bit-depth used for conversion.
+    out_normalised_code_value
+        Whether the *Fujifilm F-Log2* non-linear data :math:`out` is encoded as
+        normalised code values.
+    in_reflection
+        Whether the light level :math:`in` to a camera is reflection.
+    constants
+        *Fujifilm F-Log2* constants.
+
+    Returns
+    -------
+    :class:`numpy.floating` or :class:`numpy.ndarray`
+        *Fujifilm F-Log2* non-linear encoded data :math:`out`.
+
+    Notes
+    -----
+    +------------+-----------------------+---------------+
+    | **Domain** | **Scale - Reference** | **Scale - 1** |
+    +============+=======================+===============+
+    | ``in_r``   | 1                     | 1             |
+    +------------+-----------------------+---------------+
+
+    +------------+-----------------------+---------------+
+    | **Range**  | **Scale - Reference** | **Scale - 1** |
+    +============+=======================+===============+
+    | ``out_r``  | 1                     | 1             |
+    +------------+-----------------------+---------------+
+
+    References
+    ----------
+    :cite:`Fujifilm2022a`
+
+    Examples
+    --------
+    >>> log_encoding_FLog2(0.18)  # doctest: +ELLIPSIS
+    0.3910072...
+
+    The values of *2-2. F-Log2 Code Value* table in
+    :cite:`Fujifilm2022a` are obtained as follows:
+
+    >>> x = np.array([0, 18, 90]) / 100
+    >>> np.around(log_encoding_FLog2(x, 10, False) * 100, 1)
+
+>>> Docstring for S-Log3 (log_encoding_SLog3):
+
+    Apply the *Sony S-Log3* log encoding opto-electronic transfer function
+    (OETF).
+
+    Parameters
+    ----------
+    x
+        Reflection or :math:`IRE / 100` input light level :math:`x` to a
+        camera.
+    bit_depth
+        Bit-depth used for conversion.
+    out_normalised_code_value
+        Whether the *Sony S-Log3* non-linear data data :math:`y` is encoded as
+        normalised code values.
+    in_reflection
+        Whether the light level :math:`x` to a camera is reflection.
+
+    Returns
+    -------
+    :class:`numpy.ndarray`
+        *Sony S-Log3* non-linear encoded data :math:`y`.
+
+    Notes
+    -----
+    +------------+-----------------------+---------------+
+    | **Domain** | **Scale - Reference** | **Scale - 1** |
+    +============+=======================+===============+
+    | ``x``      | 1                     | 1             |
+    +------------+-----------------------+---------------+
+
+    +------------+-----------------------+---------------+
+    | **Range**  | **Scale - Reference** | **Scale - 1** |
+    +============+=======================+===============+
+    | ``y``      | 1                     | 1             |
+    +------------+-----------------------+---------------+
+
+    References
+    ----------
+    :cite:`SonyCorporationd`
+
+    Examples
+    --------
+    >>> log_encoding_SLog3(0.18)  # doctest: +ELLIPSIS
+    0.4105571...
+
+    The values of *S-Log3 10bit code values (18%, 90%)* table in
+    :cite:`SonyCorporationd` are obtained as follows:
+
+    >>> x = np.array([0, 18, 90]) / 100
+    >>> np.around(log_encoding_SLog3(x, 10, False) * 100).astype(np.int_)
+
+>>> Docstring for V-Log (log_encoding_VLog):
+
+    Apply the *Panasonic V-Log* log encoding opto-electronic transfer function (OETF).
+
+    Parameters
+    ----------
+    L_in
+        Linear reflection data :math:`L_{in}`.
+    bit_depth
+        Bit-depth used for conversion.
+    out_normalised_code_value
+        Whether the *Panasonic V-Log* non-linear data :math:`V_{out}` is
+        encoded as normalised code values.
+    in_reflection
+        Whether the light level :math:`L_{in}` to a camera is reflection.
+    constants
+        *Panasonic V-Log* constants.
+
+    Returns
+    -------
+    :class:`numpy.ndarray`
+        *Panasonic V-Log* mon-linear encoded data :math:`V_{out}`.
+
+    Notes
+    -----
+    +------------+-----------------------+---------------+
+    | **Domain** | **Scale - Reference** | **Scale - 1** |
+    +============+=======================+===============+
+    | ``L_in``   | 1                     | 1             |
+    +------------+-----------------------+---------------+
+
+    +------------+-----------------------+---------------+
+    | **Range**  | **Scale - Reference** | **Scale - 1** |
+    +============+=======================+===============+
+    | ``V_out``  | 1                     | 1             |
+    +------------+-----------------------+---------------+
+
+    References
+    ----------
+    :cite:`Panasonic2014a`
+
+    Examples
+    --------
+    >>> log_encoding_VLog(0.18)  # doctest: +ELLIPSIS
+    0.4233114...
+
+    The values of *Fig.2.2 V-Log Code Value* table in :cite:`Panasonic2014a`
+    are obtained as follows:
+
+    >>> L_in = np.array([0, 18, 90]) / 100
+    >>> np.around(log_encoding_VLog(L_in, 10, False) * 100).astype(np.int_)
+
+>>> Docstring for Canon Log 2 (log_encoding_CanonLog2):
+
+    Apply the *Canon Log 2* log encoding opto-electronic transfer function (OETF).
+
+    Parameters
+    ----------
+    x
+        Linear data :math:`x`.
+    bit_depth
+        Bit-depth used for conversion.
+    out_normalised_code_value
+        Whether the *Canon Log 2* non-linear data is encoded as normalised
+        code values.
+    in_reflection
+        Whether the light level :math:`x` to a camera is reflection.
+    method
+        Computation method.
+
+    Returns
+    -------
+    :class:`numpy.ndarray`
+        *Canon Log 2* non-linear encoded data.
+
+    Notes
+    -----
+    +------------+-----------------------+---------------+
+    | **Domain** | **Scale - Reference** | **Scale - 1** |
+    +============+=======================+===============+
+    | ``x``      | 1                     | 1             |
+    +------------+-----------------------+---------------+
+
+    +------------+-----------------------+---------------+
+    | **Range**  | **Scale - Reference** | **Scale - 1** |
+    +============+=======================+===============+
+    | ``clog2``  | 1                     | 1             |
+    +------------+-----------------------+---------------+
+
+    References
+    ----------
+    :cite:`Canon2016`, :cite:`Canon2020`
+
+    Examples
+    --------
+    >>> log_encoding_CanonLog2(0.18) * 100  # doctest: +ELLIPSIS
+    39.8254692...
+
+
+>>> Docstring for Canon Log 3 (log_encoding_CanonLog3):
+
+    Apply the *Canon Log 3* log encoding opto-electronic transfer function (OETF).
+
+    Parameters
+    ----------
+    x
+        Linear data :math:`x`.
+    bit_depth
+        Bit-depth used for conversion.
+    out_normalised_code_value
+        Whether the *Canon Log 3* non-linear data is encoded as normalised
+        code values.
+    in_reflection
+        Whether the light level :math:`x` to a camera is reflection.
+    method
+        Computation method.
+
+    Returns
+    -------
+    :class:`numpy.ndarray`
+        *Canon Log 3* non-linear encoded data.
+
+    Notes
+    -----
+    -   Introspection of the grafting points by Shaw, N. (2018) shows that
+        the *Canon Log 3* v1 IDT was likely derived from its encoding curve
+        as the latter is grafted at *+/-0.014*::
+
+            >>> clog3 = 0.04076162
+            >>> (clog3 - 0.073059361) / 2.3069815
+            -0.014000000000000002
+            >>> clog3 = 0.105357102
+            >>> (clog3 - 0.073059361) / 2.3069815
+            0.013999999999999997
+
+    +------------+-----------------------+---------------+
+    | **Domain** | **Scale - Reference** | **Scale - 1** |
+    +============+=======================+===============+
+    | ``x``      | 1                     | 1             |
+    +------------+-----------------------+---------------+
+
+    +------------+-----------------------+---------------+
+    | **Range**  | **Scale - Reference** | **Scale - 1** |
+    +============+=======================+===============+
+    | ``clog3``  | 1                     | 1             |
+    +------------+-----------------------+---------------+
+
+    References
+    ----------
+    :cite:`Canon2016`, :cite:`Canon2020`
+
+>>> Docstring for N-Log (log_encoding_NLog):
+
+    Apply the *Nikon N-Log* log encoding opto-electronic transfer function (OETF).
+
+    Parameters
+    ----------
+    y
+        Linear light reflectance :math:`y`, where :math:`y = 0.18` represents
+        middle grey at Stop 0.
+    bit_depth
+        Bit-depth used for conversion.
+    out_normalised_code_value
+        Whether to return the *Nikon N-Log* encoded data :math:`x` as
+        normalised code values.
+    in_reflection
+        Whether the input light level represents reflected light.
+    constants
+        *Nikon N-Log* constants.
+
+    Returns
+    -------
+    :class:`numpy.ndarray`
+        *N-Log* 10-bit equivalent code value :math:`x`.
+
+    Notes
+    -----
+    +------------+-----------------------+---------------+
+    | **Domain** | **Scale - Reference** | **Scale - 1** |
+    +============+=======================+===============+
+    | ``y``      | 1                     | 1             |
+    +------------+-----------------------+---------------+
+
+    +------------+-----------------------+---------------+
+    | **Range**  | **Scale - Reference** | **Scale - 1** |
+    +============+=======================+===============+
+    | ``x``      | 1                     | 1             |
+    +------------+-----------------------+---------------+
+
+    References
+    ----------
+    :cite:`Nikon2018`
+
+    Examples
+    --------
+    >>> log_encoding_NLog(0.18)  # doctest: +ELLIPSIS
+    0.3636677...
+
+
+>>> D-Log function log_encoding_DLog NOT FOUND in colour.models
+
+>>> Docstring for Log3G10 (log_encoding_Log3G10):
+
+    Apply the *Log3G10* log encoding opto-electronic transfer function (OETF).
+
+    Parameters
+    ----------
+    x
+        Linear data :math:`x`.
+    method
+        Computation method.
+
+    Returns
+    -------
+    :class:`numpy.ndarray`
+        *Log3G10* non-linear encoded data :math:`y`.
+
+    Notes
+    -----
+    +------------+-----------------------+---------------+
+    | **Domain** | **Scale - Reference** | **Scale - 1** |
+    +============+=======================+===============+
+    | ``x``      | 1                     | 1             |
+    +------------+-----------------------+---------------+
+
+    +------------+-----------------------+---------------+
+    | **Range**  | **Scale - Reference** | **Scale - 1** |
+    +============+=======================+===============+
+    | ``y``      | 1                     | 1             |
+    +------------+-----------------------+---------------+
+
+    -   The *Log3G10* *v1* log encoding curve is the one used in
+        *REDCINE-X Beta 42*. *Resolve 12.5.2* also uses the *v1* curve.
+        *RED* is planning to use the *Log3G10* *v2* log encoding curve in
+        the release version of the *RED SDK*.
+    -   The intent of the *Log3G10* *v1* log encoding curve is that zero
+        maps to zero, 0.18 maps to 1/3, and 10 stops above 0.18 maps to
+        1.0. The name indicates this in a similar way to the naming
+        conventions of *Sony HyperGamma* curves.
+
+        The constants used in the functions do not in fact quite hit these
+        values, but rather than use corrected constants, the functions here
+        use the official *RED* values, in order to match the output of the
+        *RED SDK*.
+
+        For those interested, solving for constants which exactly hit 1/3
+        and 1.0 yields the following values::
+
+            B = 25 * (np.sqrt(4093.0) - 3) / 9
+            A = 1 / np.log10(B * 184.32 + 1)
+
+        where the function takes the form::
