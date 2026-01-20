@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 
-const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, lutData, lutSize, lutEnabled }, ref) => {
+const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, lutData, lutSize, lutDomainMin, lutDomainMax, lutEnabled }, ref) => {
   const canvasRef = useRef(null);
 
   // Persist GL resources across renders
@@ -79,6 +79,11 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
       gl.uniform1i(gl.getUniformLocation(program, 'u_lut_enabled'), lutEnabled ? 1 : 0);
       gl.uniform1i(gl.getUniformLocation(program, 'u_lut'), 1);
       gl.uniform1f(gl.getUniformLocation(program, 'u_lut_size'), lutSize || 17.0);
+
+      const lMin = lutDomainMin || [0,0,0];
+      const lMax = lutDomainMax || [1,1,1];
+      gl.uniform3f(gl.getUniformLocation(program, 'u_lut_min'), lMin[0], lMin[1], lMin[2]);
+      gl.uniform3f(gl.getUniformLocation(program, 'u_lut_max'), lMax[0], lMax[1], lMax[2]);
 
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
@@ -159,6 +164,8 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
       uniform bool u_lut_enabled;
       uniform sampler3D u_lut;
       uniform float u_lut_size;
+      uniform vec3 u_lut_min;
+      uniform vec3 u_lut_max;
 
       out vec4 outColor;
 
@@ -322,19 +329,23 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
       }
 
       vec3 apply3DLUT(vec3 color) {
-        // Half-texel correction for LUT sampling
-        // Adobe Cube LUT format has Blue channel changing fastest (corresponds to Texture X-axis),
-        // then Green (Y-axis), then Red (Z-axis).
-        // Standard texture coordinates are (s, t, p) corresponding to (x, y, z).
-        // So we need to map:
-        // Input Blue  -> Texture X (s)
-        // Input Green -> Texture Y (t)
-        // Input Red   -> Texture Z (p)
+        // 1. Normalize Input based on LUT Domain
+        // standard .cube is [0, 1], but can be wider
+        vec3 normalized = (color - u_lut_min) / (u_lut_max - u_lut_min);
 
-        vec3 uvw_coords = vec3(color.b, color.g, color.r);
+        // Clamp to [0, 1] to avoid sampling outside texture
+        normalized = clamp(normalized, 0.0, 1.0);
 
-        // Scale input range [0, 1] to [0.5/size, 1 - 0.5/size]
+        // 2. Map to Texture Coordinates (RGB -> XYZ)
+        // Adobe .cube: Red changes fastest (X), Green (Y), Blue (Z)
+        // This was the critical fix: ensuring Red maps to Texture X
+        vec3 uvw_coords = normalized;
+
+        // 3. Half-Texel Correction (Linear Interpolation)
+        // Maps [0, 1] to [0.5/size, 1 - 0.5/size]
+        // This ensures sample points align with texel centers or interpolate correctly between them.
         vec3 uvw = uvw_coords * ((u_lut_size - 1.0) / u_lut_size) + (0.5 / u_lut_size);
+
         return texture(u_lut, uvw).rgb;
       }
 
@@ -538,6 +549,11 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
         gl.uniform1i(gl.getUniformLocation(program, 'u_lut'), 1); // Texture Unit 1
         gl.uniform1f(gl.getUniformLocation(program, 'u_lut_size'), lutSize || 17.0);
 
+        const lMin = lutDomainMin || [0,0,0];
+        const lMax = lutDomainMax || [1,1,1];
+        gl.uniform3f(gl.getUniformLocation(program, 'u_lut_min'), lMin[0], lMin[1], lMin[2]);
+        gl.uniform3f(gl.getUniformLocation(program, 'u_lut_max'), lMax[0], lMax[1], lMax[2]);
+
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
     } catch (e) {
@@ -561,7 +577,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
         vaoRef.current = null;
     };
 
-  }, [width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, lutData, lutSize, lutEnabled]);
+  }, [width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, lutData, lutSize, lutDomainMin, lutDomainMax, lutEnabled]);
 
   return <canvas ref={canvasRef} className="max-w-full shadow-lg border border-gray-300" />;
 });

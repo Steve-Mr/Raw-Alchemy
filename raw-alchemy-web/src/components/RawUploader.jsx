@@ -22,6 +22,8 @@ const RawUploader = () => {
   // LUT State
   const [lutData, setLutData] = useState(null); // Float32Array
   const [lutSize, setLutSize] = useState(0);
+  const [lutDomainMin, setLutDomainMin] = useState([0, 0, 0]);
+  const [lutDomainMax, setLutDomainMax] = useState([1, 1, 1]);
   const [lutName, setLutName] = useState(null);
   const [lutEnabled, setLutEnabled] = useState(false);
 
@@ -140,9 +142,11 @@ const RawUploader = () => {
     reader.onload = (ev) => {
         try {
             const content = ev.target.result;
-            const { title, size, data } = parseCubeLUT(content);
+            const { title, size, data, domainMin, domainMax } = parseCubeLUT(content);
             setLutData(data);
             setLutSize(size);
+            setLutDomainMin(domainMin);
+            setLutDomainMax(domainMax);
             setLutName(title || file.name);
             setLutEnabled(true);
             setError(null);
@@ -451,6 +455,8 @@ const RawUploader = () => {
                     logCurveType={LOG_SPACE_CONFIG[targetLogSpace] ? LOG_SPACE_CONFIG[targetLogSpace].id : 0}
                     lutData={lutData}
                     lutSize={lutSize}
+                    lutDomainMin={lutDomainMin}
+                    lutDomainMax={lutDomainMax}
                     lutEnabled={lutEnabled}
                 />
             </div>

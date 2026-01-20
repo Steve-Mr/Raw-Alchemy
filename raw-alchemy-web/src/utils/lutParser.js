@@ -3,6 +3,8 @@ export function parseCubeLUT(content) {
   const lines = content.split(/\r?\n/);
   let size = 0;
   let title = null;
+  let domainMin = [0.0, 0.0, 0.0];
+  let domainMax = [1.0, 1.0, 1.0];
   const data = [];
   let readingData = false;
 
@@ -22,28 +24,25 @@ export function parseCubeLUT(content) {
         const parts = line.split(/\s+/);
         size = parseInt(parts[1], 10);
         readingData = true; // Data usually follows
+      } else if (line.startsWith('DOMAIN_MIN')) {
+        const parts = line.split(/\s+/);
+        if (parts.length >= 4) {
+            domainMin = [parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3])];
+        }
+      } else if (line.startsWith('DOMAIN_MAX')) {
+        const parts = line.split(/\s+/);
+        if (parts.length >= 4) {
+            domainMax = [parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3])];
+        }
       }
       // Note: LUT_1D_SIZE is not supported, we assume 3D based on requirements
       continue;
     }
 
     // Try parsing numbers
-    // Some cube files put multiple triplets on one line?
-    // Spec says: "The data lines... define the output values... Each line must contain 3 numbers..."
-    // But some parsers are lenient. Let's assume standard 3 numbers per line or space separated.
-
-    // If we haven't found size yet, we shouldn't be here (or data started without size?)
-    // Standard requires LUT_3D_SIZE before data.
-
     if (readingData) {
         // Check if this line is a keyword (e.g. DOMAIN_MIN) which might appear after size?
-        // Spec: "Keywords... must appear before the table data".
-        // So once we see data, it's data.
-        // But let's be safe. If line starts with a letter, check if it's a number?
-        // Numbers can start with -, ., or digits.
         if (/^[a-zA-Z]/.test(line)) {
-            // It's a keyword?
-            // e.g. DOMAIN_MIN
             continue;
         }
 
@@ -65,7 +64,6 @@ export function parseCubeLUT(content) {
   const expectedCount = size * size * size * 3;
   if (data.length !== expectedCount) {
       console.warn(`LUT data count mismatch. Expected ${expectedCount}, got ${data.length}. Attempting to use what we have or fail.`);
-      // If we have less, we might crash. If more, maybe ok.
       if (data.length < expectedCount) {
           throw new Error(`Insufficient data in LUT. Expected ${expectedCount}, got ${data.length}`);
       }
@@ -74,6 +72,8 @@ export function parseCubeLUT(content) {
   return {
     title,
     size,
+    domainMin,
+    domainMax,
     data: new Float32Array(data)
   };
 }
