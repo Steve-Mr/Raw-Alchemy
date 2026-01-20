@@ -51,16 +51,6 @@ export const calculateCamToProPhoto = (camToXyz) => {
         return [1,0,0, 0,1,0, 0,0,1];
     }
 
-    // Convert LibRaw matrix to 3x3 standard format
-    // LibRaw often gives `rgb_cam` as: [RR, RG, RB, 0, GR, GG, GB, 0, BR, BG, BB, 0] ?
-    // OR `cam_xyz` (Camera to XYZ) as: [X_r, X_g, X_b, Y_r, Y_g, Y_b, Z_r, Z_g, Z_b] ?
-
-    // NOTE: LibRaw's `rgb_cam` is typically the inverse (XYZ -> Camera).
-    // `cam_xyz` is usually Camera -> XYZ (D65).
-    // We need to check what `libraw-wasm` returns in `rgb_cam`.
-    // Assuming `rgb_cam` is the Camera to XYZ matrix (standard in many raw tools names, confusingly).
-    // If it's 3x4 (12 elements), we skip every 4th element (the zero).
-
     let m3x3 = [];
     if (camToXyz.length === 9) {
         m3x3 = camToXyz;
@@ -76,52 +66,127 @@ export const calculateCamToProPhoto = (camToXyz) => {
          m3x3 = camToXyz.slice(0, 9);
     }
 
-    // Normalize rows?
-    // Usually raw matrices are normalized to D65. ProPhoto is D50.
-    // Chromatic adaptation might be needed if the white points differ significantly
-    // and we want perfect accuracy.
-    // LibRaw usually gives cam_xyz relative to D65.
-    // ProPhoto (ROMM) is D50.
-    // Ideally: Cam(D65) -> XYZ(D65) -> Bradford(D65->D50) -> ProPhoto(D50).
-    // FOR MVP: We will do simple multiplication Cam->XYZ->ProPhoto.
-    // This ignores White Point adaptation but is "close enough" for Phase 3 Log tests.
-
     return multiplyMatrices(XYZ_TO_PROPHOTO_MAT, m3x3);
 };
 
+// --- LOG SPACE DEFINITIONS ---
 
-/**
- * Linear ProPhoto RGB -> Linear Arri Alexa Wide Gamut Matrix
- * Calculated from primaries.
- * Source: Derived or standard constants.
- */
-// Calculated ProPhoto (D50) -> Alexa Wide Gamut (D65) ?
-// Or assuming ProPhoto is adapted to D65?
-// Usually working spaces are D65 in these pipelines.
-// Let's assume standard definitions.
-// ProPhoto -> XYZ -> Alexa.
-// Here is a pre-calculated matrix for ProPhoto (D50) -> Alexa Wide Gamut (assuming Bradford adaptation included if needed, or just gamut conversion).
-// Since we want "Target Log Gamut (Linear)", and Alexa is usually D65.
-// Let's use a standard matrix found in open source LUT tools or colour-science.
-//
-// Linear ProPhoto RGB (D50) -> Linear Arri Alexa Wide Gamut (D65)
-// Values calculated via standard chromatic adaptation (Bradford) and Gamut conversion.
-// Source reference: colour-science or similar standard tools.
-// ProPhoto RGB (ROMM) uses D50 white point.
-// Alexa Wide Gamut uses D65 white point.
-// Matrix includes Chromatic Adaptation (D50 -> D65) + Primaries Rotation.
-const PROPHOTO_TO_ALEXA_MAT = [
-     0.840705, 0.160166, -0.000871,
-    -0.007699, 1.011893, -0.004194,
-    -0.003975, -0.004652, 0.830626
-];
+// Log Curve IDs for Shader
+export const LOG_CURVE_IDS = {
+    ARRI_LOGC3: 0,
+    F_LOG: 1,
+    F_LOG2: 2,
+    S_LOG3: 3,
+    V_LOG: 4,
+    CANON_LOG2: 5,
+    CANON_LOG3: 6,
+    N_LOG: 7,
+    D_LOG: 8,
+    LOG3G10: 9
+};
 
-export const getProPhotoToAlexaMatrix = () => {
-    // Return the hardcoded matrix for Stage 3
-    return PROPHOTO_TO_ALEXA_MAT;
+// Target Gamut Matrices: ProPhoto RGB (D50) -> Target Gamut (Usually D65)
+// Extracted from colour-science
+export const GAMUT_MATRICES = {
+    // Existing Arri LogC3 (Alexa Wide Gamut)
+    'Arri LogC3': [
+        0.840705, 0.160166, -0.000871,
+        -0.007699, 1.011893, -0.004194,
+        -0.003975, -0.004652, 0.830626
+    ],
+    // F-Gamut
+    'F-Log': [
+        1.202993, -0.065867, -0.137237,
+        -0.067143, 1.072331, -0.005128,
+        0.004014, -0.025219, 1.020950
+    ],
+    // F-Gamut (Same for F-Log2 usually if using F-Gamut)
+    'F-Log2': [
+        1.202993, -0.065867, -0.137237,
+        -0.067143, 1.072331, -0.005128,
+        0.004014, -0.025219, 1.020950
+    ],
+    // F-Gamut C
+    'F-Log2 C': [
+        0.959089, 0.114254, -0.073433,
+        -0.003432, 0.910793, 0.092660,
+        0.002179, 0.003073, 0.994501
+    ],
+    // S-Gamut3
+    'S-Log3': [
+        1.074478, -0.010574, -0.064015,
+        -0.025097, 0.903955, 0.121158,
+        0.011779, -0.000835, 0.988810
+    ],
+    // S-Gamut3.Cine
+    'S-Log3.Cine': [
+        1.255519, -0.172182, -0.083473,
+        0.005015, 0.844135, 0.150852,
+        0.037232, 0.018431, 0.944100
+    ],
+    // V-Gamut
+    'V-Log': [
+        1.118011, -0.049443, -0.068685,
+        -0.026196, 0.930914, 0.095306,
+        0.011479, 0.006510, 0.981766
+    ],
+    // Cinema Gamut (Canon)
+    'Canon Log 2': [
+        1.057152, -0.023066, -0.034204,
+        -0.004980, 0.844191, 0.160790,
+        0.008557, 0.151855, 0.839386
+    ],
+    'Canon Log 3': [
+        1.057152, -0.023066, -0.034204,
+        -0.004980, 0.844191, 0.160790,
+        0.008557, 0.151855, 0.839386
+    ],
+    // BT.2020 (N-Log, D-Log sometimes) - N-Log uses BT.2020 primaries
+    'N-Log': [
+        1.202993, -0.065867, -0.137237,
+        -0.067143, 1.072331, -0.005128,
+        0.004014, -0.025219, 1.020950
+    ],
+    // D-Gamut (DJI)
+    'D-Log': [
+        1.189488, -0.118310, -0.071278,
+        -0.079337, 0.919847, 0.159436,
+        0.014704, 0.065238, 0.920005
+    ],
+    // REDWideGamutRGB
+    'Log3G10': [
+        1.021388, 0.027567, -0.049061,
+        -0.018345, 0.861719, 0.156631,
+        0.051044, 0.201081, 0.747693
+    ]
+};
+
+// Mapping from UI Name to Curve ID
+export const LOG_SPACE_CONFIG = {
+    'Arri LogC3': { id: LOG_CURVE_IDS.ARRI_LOGC3 },
+    'F-Log': { id: LOG_CURVE_IDS.F_LOG },
+    'F-Log2': { id: LOG_CURVE_IDS.F_LOG2 },
+    'F-Log2 C': { id: LOG_CURVE_IDS.F_LOG2 }, // Use F-Log2 curve, different gamut
+    'S-Log3': { id: LOG_CURVE_IDS.S_LOG3 },
+    'S-Log3.Cine': { id: LOG_CURVE_IDS.S_LOG3 }, // Use S-Log3 curve, different gamut
+    'V-Log': { id: LOG_CURVE_IDS.V_LOG },
+    'Canon Log 2': { id: LOG_CURVE_IDS.CANON_LOG2 },
+    'Canon Log 3': { id: LOG_CURVE_IDS.CANON_LOG3 },
+    'N-Log': { id: LOG_CURVE_IDS.N_LOG },
+    'D-Log': { id: LOG_CURVE_IDS.D_LOG },
+    'Log3G10': { id: LOG_CURVE_IDS.LOG3G10 },
+};
+
+export const getProPhotoToTargetMatrix = (logSpaceName) => {
+    return GAMUT_MATRICES[logSpaceName] || GAMUT_MATRICES['Arri LogC3'];
 };
 
 // HELPER: Normalize Matrix for Shader (Flatten if needed)
 export const formatMatrixForUniform = (mat) => {
     return new Float32Array(mat);
+};
+
+// Keep deprecated export for backward compatibility if needed, but updated to use map
+export const getProPhotoToAlexaMatrix = () => {
+    return GAMUT_MATRICES['Arri LogC3'];
 };

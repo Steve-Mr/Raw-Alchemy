@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 
-const GLCanvas = ({ width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToAlexaMatrix }) => {
+const GLCanvas = ({ width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType }) => {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -48,7 +48,10 @@ const GLCanvas = ({ width, height, data, channels, bitDepth, wbMultipliers, camT
 
       // Stage 2 & 3: Color Matrices
       uniform mat3 u_cam_to_prophoto;
-      uniform mat3 u_prophoto_to_alexa;
+      uniform mat3 u_prophoto_to_target;
+
+      // Stage 4: Log Curve Selection
+      uniform int u_log_curve_type;
 
       out vec4 outColor;
 
@@ -57,17 +60,9 @@ const GLCanvas = ({ width, height, data, channels, bitDepth, wbMultipliers, camT
           return log(x) / 2.302585093;
       }
 
-      // Arri LogC3 Encoding Function (Linear -> LogC3)
-      // Source: Arri LogC3 Curve for EI 800
-      // normalized Linear input (0.0 - 1.0) -> LogC3 output (0.0 - 1.0)
-      // Parameters for EI 800:
-      // cut = 0.010591
-      // a = 5.555556
-      // b = 0.052272
-      // c = 0.247190
-      // d = 0.385537
-      // e = 5.367655
-      // f = 0.092809
+      // --- LOG FUNCTIONS ---
+
+      // 0. Arri LogC3 (EI 800)
       float logC3_EI800(float x) {
           const float cut = 0.010591;
           const float a = 5.555556;
@@ -76,20 +71,147 @@ const GLCanvas = ({ width, height, data, channels, bitDepth, wbMultipliers, camT
           const float d = 0.385537;
           const float e = 5.367655;
           const float f = 0.092809;
-
-          if (x > cut) {
-              return c * log10(a * x + b) + d;
-          } else {
-              return e * x + f;
-          }
+          if (x > cut) return c * log10(a * x + b) + d;
+          return e * x + f;
       }
 
-      vec3 applyLogC3(vec3 linearColor) {
-          return vec3(
-              logC3_EI800(linearColor.r),
-              logC3_EI800(linearColor.g),
-              logC3_EI800(linearColor.b)
-          );
+      // 1. Fujifilm F-Log
+      float fLog(float x) {
+          const float cut1 = 0.00089;
+          const float a = 0.555556;
+          const float b = 0.009468;
+          const float c = 0.344676;
+          const float d = 0.790453;
+          const float e = 8.735631;
+          const float f = 0.092864;
+          if (x < cut1) return e * x + f;
+          return c * log10(a * x + b) + d;
+      }
+
+      // 2. Fujifilm F-Log2
+      float fLog2(float x) {
+          const float cut1 = 0.000889;
+          const float a = 5.555556;
+          const float b = 0.064829;
+          const float c = 0.245281;
+          const float d = 0.384316;
+          const float e = 8.799461;
+          const float f = 0.092864;
+          if (x < cut1) return e * x + f;
+          return c * log10(a * x + b) + d;
+      }
+
+      // 3. Sony S-Log3
+      float sLog3(float x) {
+          if (x >= 0.01125000) return (420.0 + log10((x + 0.01) / (0.18 + 0.01)) * 261.5) / 1023.0;
+          return (x * (171.2102946929 - 95.0) / 0.01125000 + 95.0) / 1023.0;
+      }
+
+      // 4. Panasonic V-Log
+      float vLog(float x) {
+          const float cut1 = 0.01;
+          const float b = 0.00873;
+          const float c = 0.241514;
+          const float d = 0.598206;
+          if (x < cut1) return 5.6 * x + 0.125;
+          return c * log10(x + b) + d;
+      }
+
+      // 5. Canon Log 2 (v1.2)
+      float canonLog2(float x) {
+          // Linear segment for x < 0 handled by log behavior approximation or clamp
+          // Breakpoint at code value 0.092864125 corresponds to approx x=0 linear.
+          // For positive x, use log curve.
+          if (x < 0.0) return -(0.24136077 * log10(-x * 87.09937546 + 1.0) - 0.092864125);
+          return 0.24136077 * log10(x * 87.09937546 + 1.0) + 0.092864125;
+      }
+
+      // 6. Canon Log 3 (v1.2)
+      float canonLog3(float x) {
+          // Grafted at 0.014
+          if (x < 0.014) return 1.9754798 * x + 0.12512219;
+          return 0.36726845 * log10(x * 14.98325 + 1.0) + 0.12240537;
+      }
+
+      // 7. Nikon N-Log
+      float nLog(float x) {
+          const float cut1 = 0.328;
+          const float a = 0.635396; // 650/1023
+          const float b = 0.0075;
+          const float c = 0.146628; // 150/1023
+          const float d = 0.605083; // 619/1023
+          // Note: N-Log cut1 is defined in terms of reflectance y.
+          // Here x is linear reflectance.
+          if (x < cut1) return a * pow(x + b, 1.0/3.0);
+          return c * log(x) + d; // N-Log uses natural log (ln)
+      }
+
+      // 8. DJI D-Log
+      float dLog(float x) {
+         if (x <= 0.0078) return 6.025 * x + 0.0929;
+         return log10(x * 0.9892 + 0.0108) * 0.256663 + 0.584555;
+      }
+
+      // 9. RED Log3G10 (v3)
+      float log3G10(float x) {
+          const float a = 0.224282;
+          const float b = 155.975327;
+          const float c = 0.01;
+          // Input is offset by c
+          float x_off = x + c;
+          // Since we clamp x >= 0 before calling, x_off is always positive
+          return a * log10(x_off * b + 1.0);
+      }
+
+      vec3 applyLogCurve(vec3 linearColor, int curveType) {
+          vec3 res;
+          if (curveType == 0) { // Arri LogC3
+             res.r = logC3_EI800(linearColor.r);
+             res.g = logC3_EI800(linearColor.g);
+             res.b = logC3_EI800(linearColor.b);
+          } else if (curveType == 1) { // F-Log
+             res.r = fLog(linearColor.r);
+             res.g = fLog(linearColor.g);
+             res.b = fLog(linearColor.b);
+          } else if (curveType == 2) { // F-Log2
+             res.r = fLog2(linearColor.r);
+             res.g = fLog2(linearColor.g);
+             res.b = fLog2(linearColor.b);
+          } else if (curveType == 3) { // S-Log3
+             res.r = sLog3(linearColor.r);
+             res.g = sLog3(linearColor.g);
+             res.b = sLog3(linearColor.b);
+          } else if (curveType == 4) { // V-Log
+             res.r = vLog(linearColor.r);
+             res.g = vLog(linearColor.g);
+             res.b = vLog(linearColor.b);
+          } else if (curveType == 5) { // Canon Log 2
+             res.r = canonLog2(linearColor.r);
+             res.g = canonLog2(linearColor.g);
+             res.b = canonLog2(linearColor.b);
+          } else if (curveType == 6) { // Canon Log 3
+             res.r = canonLog3(linearColor.r);
+             res.g = canonLog3(linearColor.g);
+             res.b = canonLog3(linearColor.b);
+          } else if (curveType == 7) { // N-Log
+             res.r = nLog(linearColor.r);
+             res.g = nLog(linearColor.g);
+             res.b = nLog(linearColor.b);
+          } else if (curveType == 8) { // D-Log
+             res.r = dLog(linearColor.r);
+             res.g = dLog(linearColor.g);
+             res.b = dLog(linearColor.b);
+          } else if (curveType == 9) { // Log3G10
+             res.r = log3G10(linearColor.r);
+             res.g = log3G10(linearColor.g);
+             res.b = log3G10(linearColor.b);
+          } else {
+             // Fallback to LogC3
+             res.r = logC3_EI800(linearColor.r);
+             res.g = logC3_EI800(linearColor.g);
+             res.b = logC3_EI800(linearColor.b);
+          }
+          return res;
       }
 
       void main() {
@@ -107,24 +229,19 @@ const GLCanvas = ({ width, height, data, channels, bitDepth, wbMultipliers, camT
         }
 
         // --- STAGE 1: Input & WB (Camera Space) ---
-        // Apply WB Multipliers
-        // u_wb_multipliers is usually [R_scale, G_scale, B_scale]
-        // Note: Raw inputs are usually R, G, B.
         vec3 wb_cam = linear_cam * u_wb_multipliers;
 
         // --- STAGE 2: To Working Space (ProPhoto RGB) ---
-        // Matrix Transform: Camera -> ProPhoto
         vec3 prophoto_linear = u_cam_to_prophoto * wb_cam;
 
-        // --- STAGE 3: To Target Gamut (Alexa Wide Gamut) ---
-        // Matrix Transform: ProPhoto -> Alexa
-        vec3 alexa_linear = u_prophoto_to_alexa * prophoto_linear;
+        // --- STAGE 3: To Target Gamut (Linear) ---
+        vec3 target_linear = u_prophoto_to_target * prophoto_linear;
 
         // Clip negatives before Log (Log curves don't handle negatives well)
-        alexa_linear = max(alexa_linear, 0.0);
+        target_linear = max(target_linear, 0.0);
 
-        // --- STAGE 4: To Log Curve (Arri LogC3) ---
-        vec3 log_image = applyLogC3(alexa_linear);
+        // --- STAGE 4: To Target Log Curve ---
+        vec3 log_image = applyLogCurve(target_linear, u_log_curve_type);
 
         outColor = vec4(log_image, 1.0);
       }
@@ -222,17 +339,15 @@ const GLCanvas = ({ width, height, data, channels, bitDepth, wbMultipliers, camT
         gl.uniform1i(gl.getUniformLocation(program, 'u_image'), 0);
 
         // Color Pipeline Uniforms
-        // WB Defaults: [1,1,1] if missing
         const wb = wbMultipliers || [1.0, 1.0, 1.0];
         gl.uniform3f(gl.getUniformLocation(program, 'u_wb_multipliers'), wb[0], wb[1], wb[2]);
 
-        // Matrices (3x3)
-        // Default Identity if missing
         const identity = new Float32Array([1,0,0, 0,1,0, 0,0,1]);
-        // Note: JS matrices are Row-Major. WebGL default is Column-Major.
-        // We set 'transpose' to true so WebGL reads our Row-Major arrays correctly.
         gl.uniformMatrix3fv(gl.getUniformLocation(program, 'u_cam_to_prophoto'), true, camToProPhotoMatrix || identity);
-        gl.uniformMatrix3fv(gl.getUniformLocation(program, 'u_prophoto_to_alexa'), true, proPhotoToAlexaMatrix || identity);
+        gl.uniformMatrix3fv(gl.getUniformLocation(program, 'u_prophoto_to_target'), true, proPhotoToTargetMatrix || identity);
+
+        // Log Curve Type (Default to 0: Arri LogC3)
+        gl.uniform1i(gl.getUniformLocation(program, 'u_log_curve_type'), logCurveType !== undefined ? logCurveType : 0);
 
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
@@ -250,7 +365,7 @@ const GLCanvas = ({ width, height, data, channels, bitDepth, wbMultipliers, camT
         if (vao) gl.deleteVertexArray(vao);
     };
 
-  }, [width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToAlexaMatrix]);
+  }, [width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType]);
 
   return <canvas ref={canvasRef} className="max-w-full shadow-lg border border-gray-300" />;
 };
