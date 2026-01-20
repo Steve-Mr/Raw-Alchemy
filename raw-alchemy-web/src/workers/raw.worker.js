@@ -2,6 +2,57 @@ import LibRaw from 'libraw-wasm';
 
 let decoder = null;
 
+// Helper: Flatten a nested matrix (array of arrays) or return as-is if flat
+function flattenMatrix(mat) {
+    if (!mat) return null;
+
+    // Check if it's already a TypedArray or simple array of numbers
+    if (mat.length && typeof mat[0] === 'number') {
+        return mat;
+    }
+
+    // Handle Array of Arrays (e.g. [[r,g,b], [r,g,b]...])
+    if (Array.isArray(mat)) {
+        // Flatten
+        const flat = [];
+        for (let i = 0; i < mat.length; i++) {
+            if (Array.isArray(mat[i]) || mat[i].length) {
+                for (let j = 0; j < mat[i].length; j++) {
+                    flat.push(mat[i][j]);
+                }
+            } else {
+                flat.push(mat[i]);
+            }
+        }
+        return flat;
+    }
+
+    return null;
+}
+
+// Helper: robustly find a property in nested objects
+function findProperty(obj, key) {
+    if (!obj) return undefined;
+
+    // 1. Direct
+    if (obj[key] !== undefined) return obj[key];
+
+    // 2. Common LibRaw Nesting: 'color'
+    if (obj.color && obj.color[key] !== undefined) return obj.color[key];
+
+    // 3. Common LibRaw Nesting: 'imgdata.color'
+    if (obj.imgdata && obj.imgdata.color && obj.imgdata.color[key] !== undefined) return obj.imgdata.color[key];
+
+    // 4. 'other'
+    if (obj.other && obj.other[key] !== undefined) return obj.other[key];
+
+    // 5. 'makernotes' (unlikely for core matrices but possible)
+    if (obj.makernotes && obj.makernotes[key] !== undefined) return obj.makernotes[key];
+
+    return undefined;
+}
+
+
 // Matrix Metering Implementation (Approximate)
 function calculateMatrixExposure(data, width, height, channels, bitDepth, meta) {
     // 1. Subsample (to approx 200x200)
@@ -166,12 +217,35 @@ self.onmessage = async (e) => {
       console.log("Worker: Opening file with settings:", settings);
       await decoder.open(new Uint8Array(fileBuffer), settings);
 
-      const meta = await decoder.metadata(true);
-      console.log("Worker Metadata:", meta);
+      const rawMeta = await decoder.metadata(true);
+
+      // DEBUG: Log keys to help identify structure if this fix fails
+      console.log("Worker Raw Metadata Keys:", Object.keys(rawMeta));
+      if (rawMeta.color) console.log("Worker Meta.color keys:", Object.keys(rawMeta.color));
+      if (rawMeta.imgdata) console.log("Worker Meta.imgdata keys:", Object.keys(rawMeta.imgdata));
+
+      // ROBUST EXTRACTION & FLATTENING
+      const cleanMeta = {
+          width: rawMeta.width,
+          height: rawMeta.height,
+          // Extract & Flatten Matrices
+          rgb_cam: flattenMatrix(findProperty(rawMeta, 'rgb_cam')),
+          cam_xyz: flattenMatrix(findProperty(rawMeta, 'cam_xyz')),
+          cam_mul: flattenMatrix(findProperty(rawMeta, 'cam_mul')),
+          // Scalars
+          black: findProperty(rawMeta, 'black'),
+          maximum: findProperty(rawMeta, 'maximum') || findProperty(rawMeta, 'white'),
+          iso_speed: findProperty(rawMeta, 'iso_speed'),
+          shutter: findProperty(rawMeta, 'shutter'),
+          aperture: findProperty(rawMeta, 'aperture'),
+          focal_len: findProperty(rawMeta, 'focal_len')
+      };
+
+      console.log("Worker Cleaned Metadata:", cleanMeta);
 
       let outputData;
-      let width = meta.width;
-      let height = meta.height;
+      let width = cleanMeta.width;
+      let height = cleanMeta.height;
       let channels = 3;
       let bitDepth = 8;
       let calculatedExposure = 0.0; // Default (0 EV)
@@ -205,7 +279,7 @@ self.onmessage = async (e) => {
         // Calculate Exposure (Matrix Metering)
         // Only makes sense for linear RGB data
         if (channels === 3) {
-             const gain = calculateMatrixExposure(outputData, width, height, channels, bitDepth, meta);
+             const gain = calculateMatrixExposure(outputData, width, height, channels, bitDepth, cleanMeta);
              // Convert Gain to EV (Stop)
              // gain = 2^EV  =>  EV = log2(gain)
              calculatedExposure = Math.log2(gain);
@@ -221,7 +295,7 @@ self.onmessage = async (e) => {
         channels,
         bitDepth,
         mode,
-        meta,
+        meta: cleanMeta, // Send the cleaned/flat metadata
         calculatedExposure // Send back the calculated EV
       }, [outputData.buffer]);
 
