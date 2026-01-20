@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*' # Push events to tags matching v*, e.g. v1.0, v20.15.10
+  workflow_dispatch:
 
 jobs:
   build-windows:
@@ -41,19 +42,34 @@ jobs:
   build-linux:
     name: Build for Linux
     runs-on: ubuntu-latest
+    container: debian:buster
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+      - name: Install Build Dependencies
+        run: |
+          apt-get update
+          apt-get install -y wget build-essential libssl-dev zlib1g-dev \
+            libbz2-dev libreadline-dev libsqlite3-dev curl llvm \
+            libncurses5-dev libncursesw5-dev xz-utils tk-dev libffi-dev \
+            liblzma-dev git
+
+      - name: Build and Install Python 3.12
+        run: |
+          wget https://www.python.org/ftp/python/3.12.4/Python-3.12.4.tgz
+          tar -xf Python-3.12.4.tgz
+          cd Python-3.12.4
+          ./configure --enable-optimizations
+          make -j$(nproc)
+          make install
+          cd ..
+          rm -rf Python-3.12.4 Python-3.12.4.tgz
 
       - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip setuptools wheel
-          pip install .
+          python3 -m pip install --upgrade pip setuptools wheel
+          pip3 install .
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
