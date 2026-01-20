@@ -166,7 +166,8 @@ self.onmessage = async (e) => {
       console.log("Worker: Opening file with settings:", settings);
       await decoder.open(new Uint8Array(fileBuffer), settings);
 
-      const meta = await decoder.metadata();
+      const meta = await decoder.metadata(true);
+      console.log("Worker Metadata:", meta);
 
       let outputData;
       let width = meta.width;

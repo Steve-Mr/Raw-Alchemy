@@ -56,10 +56,18 @@ const RawUploader = () => {
 
   // Separate effect for WB initialization to avoid overwriting user edits on other updates
   useEffect(() => {
-    if (metadata && metadata.cam_mul) {
-         setWbRed(metadata.cam_mul[0]);
-         setWbBlue(metadata.cam_mul[2]);
-         setWbGreen(metadata.cam_mul[1]);
+    if (metadata) {
+        if (metadata.cam_mul) {
+            setWbRed(metadata.cam_mul[0]);
+            setWbBlue(metadata.cam_mul[2]);
+            setWbGreen(metadata.cam_mul[1]);
+        } else {
+            // Fallback for when metadata is missing (e.g. non-verbose decode or format not supporting it)
+            // Use approximate Daylight multipliers to avoid extreme green tint
+            setWbRed(2.0);
+            setWbGreen(1.0);
+            setWbBlue(1.5);
+        }
     }
   }, [metadata]); // Runs only when metadata object reference changes (new file loaded)
 
