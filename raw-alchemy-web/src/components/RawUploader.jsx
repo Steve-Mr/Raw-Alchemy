@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import GLCanvas from './GLCanvas';
-import { calculateCamToProPhoto, getProPhotoToAlexaMatrix, formatMatrixForUniform } from '../utils/colorMath';
+import { calculateCamToProPhoto, getProPhotoToTargetMatrix, formatMatrixForUniform, LOG_SPACE_CONFIG } from '../utils/colorMath';
 
 const RawUploader = () => {
   const [loading, setLoading] = useState(false);
@@ -15,7 +15,8 @@ const RawUploader = () => {
   const [wbGreen, setWbGreen] = useState(1.0); // Usually kept at 1.0 or derived
 
   const [camToProPhotoMat, setCamToProPhotoMat] = useState(null);
-  const [proPhotoToAlexaMat, setProPhotoToAlexaMat] = useState(null);
+  const [proPhotoToTargetMat, setProPhotoToTargetMat] = useState(null);
+  const [targetLogSpace, setTargetLogSpace] = useState('Arri LogC3');
 
   const workerRef = useRef(null);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -27,32 +28,41 @@ const RawUploader = () => {
     };
   }, []);
 
-  // Update matrices when metadata changes
+  // Update matrices when metadata or target log space changes
   useEffect(() => {
       if (metadata) {
           // 1. Initialize WB Sliders from Metadata (As Shot)
-          if (metadata.cam_mul) {
-              // cam_mul is typically [R, G, B, G] or similar.
-              // We want to normalize G to 1.0 ideally, or just use as is.
-              // Let's use as is for "As Shot".
-              // Note: LibRaw cam_mul often has Green around 1.0.
-              setWbRed(metadata.cam_mul[0]);
-              setWbBlue(metadata.cam_mul[2]);
-              setWbGreen(metadata.cam_mul[1]);
-          }
+          // Only if sliders haven't been moved manually?
+          // For now, let's keep it reactive to metadata load only (not resetting on every render)
+          // We can't distinguish "initial load" easily without more state, but this effect runs on metadata change.
+          // We should be careful not to overwrite user changes if metadata doesn't change.
+          // Ideally, we set WB only when metadata *first* arrives.
+      }
+  }, [metadata]);
 
-          // 2. Calculate Matrices
-          // Extract cam_xyz or rgb_cam
-          // Priority: rgb_cam (if available) -> cam_xyz
+  // Separate effect for WB initialization to avoid overwriting user edits on other updates
+  useEffect(() => {
+    if (metadata && metadata.cam_mul) {
+         setWbRed(metadata.cam_mul[0]);
+         setWbBlue(metadata.cam_mul[2]);
+         setWbGreen(metadata.cam_mul[1]);
+    }
+  }, [metadata]); // Runs only when metadata object reference changes (new file loaded)
+
+  // Effect to recalculate matrices whenever metadata OR targetLogSpace changes
+  useEffect(() => {
+      if (metadata) {
+          // 1. Calculate Cam -> ProPhoto
           const rawMatrix = metadata.rgb_cam || metadata.cam_xyz;
-
           const c2p = calculateCamToProPhoto(rawMatrix);
           setCamToProPhotoMat(formatMatrixForUniform(c2p));
 
-          const p2a = getProPhotoToAlexaMatrix();
-          setProPhotoToAlexaMat(formatMatrixForUniform(p2a));
+          // 2. Calculate ProPhoto -> Target Log Gamut
+          const p2t = getProPhotoToTargetMatrix(targetLogSpace);
+          setProPhotoToTargetMat(formatMatrixForUniform(p2t));
       }
-  }, [metadata]);
+  }, [metadata, targetLogSpace]);
+
 
   const handleProcess = async (fileToProcess, selectedMode) => {
     if (!fileToProcess) return;
@@ -200,16 +210,35 @@ const RawUploader = () => {
                       </div>
                   </div>
 
-                  {/* Metadata Debug */}
-                  <div className="text-xs font-mono text-gray-500 overflow-auto h-32 bg-gray-100 p-2 rounded">
-                      <strong>Metadata Extraction:</strong>
-                      <pre>{metadata ? JSON.stringify({
-                          cam_mul: metadata.cam_mul,
-                          rgb_cam: metadata.rgb_cam ? 'Found (Length: ' + metadata.rgb_cam.length + ')' : 'Not Found',
-                          cam_xyz: metadata.cam_xyz ? 'Found' : 'Not Found',
-                          black: metadata.black,
-                          white: metadata.maximum
-                      }, null, 2) : 'No Metadata'}</pre>
+                  {/* Target Space Controls */}
+                  <div>
+                      <h4 className="text-sm font-semibold text-gray-600 mb-2">Target Log Space</h4>
+                      <div className="mb-4">
+                          <label className="block text-xs text-gray-500 mb-1">Select Output Format:</label>
+                          <select
+                              className="block w-full p-2 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
+                              value={targetLogSpace}
+                              onChange={(e) => setTargetLogSpace(e.target.value)}
+                          >
+                              {Object.keys(LOG_SPACE_CONFIG).map((spaceName) => (
+                                  <option key={spaceName} value={spaceName}>
+                                      {spaceName}
+                                  </option>
+                              ))}
+                          </select>
+                      </div>
+
+                      {/* Metadata Debug */}
+                      <div className="text-xs font-mono text-gray-500 overflow-auto h-20 bg-gray-100 p-2 rounded">
+                          <strong>Metadata Extraction:</strong>
+                          <pre>{metadata ? JSON.stringify({
+                              cam_mul: metadata.cam_mul,
+                              rgb_cam: metadata.rgb_cam ? 'Found (Length: ' + metadata.rgb_cam.length + ')' : 'Not Found',
+                              cam_xyz: metadata.cam_xyz ? 'Found' : 'Not Found',
+                              black: metadata.black,
+                              white: metadata.maximum
+                          }, null, 2) : 'No Metadata'}</pre>
+                      </div>
                   </div>
               </div>
           </div>
@@ -246,11 +275,12 @@ const RawUploader = () => {
                     bitDepth={imageState.bitDepth}
                     wbMultipliers={[wbRed, wbGreen, wbBlue]}
                     camToProPhotoMatrix={camToProPhotoMat}
-                    proPhotoToAlexaMatrix={proPhotoToAlexaMat}
+                    proPhotoToTargetMatrix={proPhotoToTargetMat}
+                    logCurveType={LOG_SPACE_CONFIG[targetLogSpace] ? LOG_SPACE_CONFIG[targetLogSpace].id : 0}
                 />
             </div>
             <p className="text-xs text-gray-500 text-center">
-                * Displaying: Arri LogC3 (Flat Look) | Pipeline: RAW &rarr; WB &rarr; Cam2ProPhoto &rarr; ProPhoto2Alexa &rarr; LogC3
+                * Displaying: {targetLogSpace} | Pipeline: RAW &rarr; WB &rarr; Cam2ProPhoto &rarr; ProPhoto2Target &rarr; {targetLogSpace} Curve
             </p>
         </div>
       )}
