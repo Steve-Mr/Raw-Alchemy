@@ -1,0 +1,53 @@
+
+> raw-alchemy-web@0.0.0 dev
+> vite
+
+
+  VITE v7.3.1  ready in 453 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+11:52:18 PM [vite] (client) warning: The character ">" is not valid inside a JSX element
+251 |              </div>
+252 |              <p className="text-xs text-gray-500 text-center">
+253 |                  * Displaying: Arri LogC3 (Flat Look) | Pipeline: RAW -> WB -> Cam2ProPhoto -> ProPhoto2Alexa -> LogC3
+    |                                                                        ^
+254 |              </p>
+255 |          </div>
+
+  Plugin: vite:esbuild
+  File: /app/raw-alchemy-web/src/components/RawUploader.jsx
+11:52:18 PM [vite] (client) warning: The character ">" is not valid inside a JSX element
+251 |              </div>
+252 |              <p className="text-xs text-gray-500 text-center">
+253 |                  * Displaying: Arri LogC3 (Flat Look) | Pipeline: RAW -> WB -> Cam2ProPhoto -> ProPhoto2Alexa -> LogC3
+    |                                                                              ^
+254 |              </p>
+255 |          </div>
+
+  Plugin: vite:esbuild
+  File: /app/raw-alchemy-web/src/components/RawUploader.jsx
+11:52:18 PM [vite] (client) warning: The character ">" is not valid inside a JSX element
+251 |              </div>
+252 |              <p className="text-xs text-gray-500 text-center">
+253 |                  * Displaying: Arri LogC3 (Flat Look) | Pipeline: RAW -> WB -> Cam2ProPhoto -> ProPhoto2Alexa -> LogC3
+    |                                                                                              ^
+254 |              </p>
+255 |          </div>
+
+  Plugin: vite:esbuild
+  File: /app/raw-alchemy-web/src/components/RawUploader.jsx
+11:52:18 PM [vite] (client) warning: The character ">" is not valid inside a JSX element
+251 |              </div>
+252 |              <p className="text-xs text-gray-500 text-center">
+253 |                  * Displaying: Arri LogC3 (Flat Look) | Pipeline: RAW -> WB -> Cam2ProPhoto -> ProPhoto2Alexa -> LogC3
+    |                                                                                                                ^
+254 |              </p>
+255 |          </div>
+
+  Plugin: vite:esbuild
+  File: /app/raw-alchemy-web/src/components/RawUploader.jsx
+11:53:56 PM [vite] (client) hmr update /src/index.css, /src/components/GLCanvas.jsx
+11:54:11 PM [vite] (client) hmr update /src/index.css, /src/components/RawUploader.jsx
+11:54:22 PM [vite] (client) hmr update /src/components/RawUploader.jsx, /src/index.css
+11:56:29 PM [vite] (client) hmr update /src/index.css, /src/components/GLCanvas.jsx

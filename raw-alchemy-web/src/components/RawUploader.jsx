@@ -1,11 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import GLCanvas from './GLCanvas';
+import { calculateCamToProPhoto, getProPhotoToAlexaMatrix, formatMatrixForUniform } from '../utils/colorMath';
 
 const RawUploader = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [imageState, setImageState] = useState(null); // { data, width, height, channels, bitDepth, mode }
   const [mode, setMode] = useState('rgb'); // 'rgb' or 'bayer'
+  const [metadata, setMetadata] = useState(null);
+
+  // Pipeline State
+  const [wbRed, setWbRed] = useState(1.0);
+  const [wbBlue, setWbBlue] = useState(1.0);
+  const [wbGreen, setWbGreen] = useState(1.0); // Usually kept at 1.0 or derived
+
+  const [camToProPhotoMat, setCamToProPhotoMat] = useState(null);
+  const [proPhotoToAlexaMat, setProPhotoToAlexaMat] = useState(null);
 
   const workerRef = useRef(null);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -17,28 +27,53 @@ const RawUploader = () => {
     };
   }, []);
 
+  // Update matrices when metadata changes
+  useEffect(() => {
+      if (metadata) {
+          // 1. Initialize WB Sliders from Metadata (As Shot)
+          if (metadata.cam_mul) {
+              // cam_mul is typically [R, G, B, G] or similar.
+              // We want to normalize G to 1.0 ideally, or just use as is.
+              // Let's use as is for "As Shot".
+              // Note: LibRaw cam_mul often has Green around 1.0.
+              setWbRed(metadata.cam_mul[0]);
+              setWbBlue(metadata.cam_mul[2]);
+              setWbGreen(metadata.cam_mul[1]);
+          }
+
+          // 2. Calculate Matrices
+          // Extract cam_xyz or rgb_cam
+          // Priority: rgb_cam (if available) -> cam_xyz
+          const rawMatrix = metadata.rgb_cam || metadata.cam_xyz;
+
+          const c2p = calculateCamToProPhoto(rawMatrix);
+          setCamToProPhotoMat(formatMatrixForUniform(c2p));
+
+          const p2a = getProPhotoToAlexaMatrix();
+          setProPhotoToAlexaMat(formatMatrixForUniform(p2a));
+      }
+  }, [metadata]);
+
   const handleProcess = async (fileToProcess, selectedMode) => {
     if (!fileToProcess) return;
 
     setLoading(true);
     setError(null);
-    setImageState(null); // Clear previous image state to unmount GLCanvas
+    setImageState(null);
+    setMetadata(null); // Reset metadata
 
-    // 1. Terminate old worker (Reset Engine)
     if (workerRef.current) {
         workerRef.current.terminate();
         workerRef.current = null;
     }
 
-    // 2. Create new worker
-    // Using a fresh worker for every file guarantees a clean WASM memory state.
-    // This fixes issues with corrupted output on subsequent loads.
     workerRef.current = new Worker(new URL('../workers/raw.worker.js', import.meta.url), { type: 'module' });
 
     workerRef.current.onmessage = (e) => {
-      const { type, data, width, height, channels, bitDepth, error: workerError, mode: resultMode } = e.data;
+      const { type, data, width, height, channels, bitDepth, error: workerError, mode: resultMode, meta } = e.data;
 
       if (type === 'success') {
+        setMetadata(meta); // Save metadata for pipeline
         setImageState({
           data,
           width,
@@ -60,7 +95,6 @@ const RawUploader = () => {
         setLoading(false);
     };
 
-    // 3. Process File
     try {
       const buffer = await fileToProcess.arrayBuffer();
 
@@ -69,7 +103,7 @@ const RawUploader = () => {
         fileBuffer: buffer,
         mode: selectedMode,
         id: Date.now()
-      }, [buffer]); // Transfer the buffer to worker
+      }, [buffer]);
 
     } catch (err) {
       setError("Failed to read file: " + err.message);
@@ -80,7 +114,6 @@ const RawUploader = () => {
   const handleFileSelect = (e) => {
     if (e.target.files[0]) {
       setSelectedFile(e.target.files[0]);
-      // Auto-process on select with current mode
       handleProcess(e.target.files[0], mode);
     }
   };
@@ -127,6 +160,61 @@ const RawUploader = () => {
         "
       />
 
+      {/* --- COLOR PIPELINE CONTROLS --- */}
+      {imageState && mode === 'rgb' && (
+          <div className="mb-6 p-4 bg-gray-50 rounded border border-gray-200">
+              <h3 className="text-md font-bold text-gray-700 mb-3">Color Pipeline Controls</h3>
+
+              <div className="grid grid-cols-2 gap-6">
+                  {/* WB Controls */}
+                  <div>
+                      <h4 className="text-sm font-semibold text-gray-600 mb-2">White Balance (Multipliers)</h4>
+                      <div className="space-y-2">
+                          <div>
+                              <label className="block text-xs text-gray-500">Red Gain: {wbRed.toFixed(3)}</label>
+                              <input
+                                  type="range" min="0.1" max="5.0" step="0.01"
+                                  value={wbRed}
+                                  onChange={(e) => setWbRed(parseFloat(e.target.value))}
+                                  className="w-full"
+                              />
+                          </div>
+                          <div>
+                              <label className="block text-xs text-gray-500">Green Gain: {wbGreen.toFixed(3)} (Ref)</label>
+                              <input
+                                  type="range" min="0.1" max="5.0" step="0.01"
+                                  value={wbGreen}
+                                  onChange={(e) => setWbGreen(parseFloat(e.target.value))}
+                                  className="w-full"
+                              />
+                          </div>
+                          <div>
+                              <label className="block text-xs text-gray-500">Blue Gain: {wbBlue.toFixed(3)}</label>
+                              <input
+                                  type="range" min="0.1" max="5.0" step="0.01"
+                                  value={wbBlue}
+                                  onChange={(e) => setWbBlue(parseFloat(e.target.value))}
+                                  className="w-full"
+                              />
+                          </div>
+                      </div>
+                  </div>
+
+                  {/* Metadata Debug */}
+                  <div className="text-xs font-mono text-gray-500 overflow-auto h-32 bg-gray-100 p-2 rounded">
+                      <strong>Metadata Extraction:</strong>
+                      <pre>{metadata ? JSON.stringify({
+                          cam_mul: metadata.cam_mul,
+                          rgb_cam: metadata.rgb_cam ? 'Found (Length: ' + metadata.rgb_cam.length + ')' : 'Not Found',
+                          cam_xyz: metadata.cam_xyz ? 'Found' : 'Not Found',
+                          black: metadata.black,
+                          white: metadata.maximum
+                      }, null, 2) : 'No Metadata'}</pre>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {loading && (
         <div className="flex items-center space-x-2 text-blue-600 mb-4">
             <svg className="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -156,10 +244,13 @@ const RawUploader = () => {
                     data={imageState.data}
                     channels={imageState.channels}
                     bitDepth={imageState.bitDepth}
+                    wbMultipliers={[wbRed, wbGreen, wbBlue]}
+                    camToProPhotoMatrix={camToProPhotoMat}
+                    proPhotoToAlexaMatrix={proPhotoToAlexaMat}
                 />
             </div>
             <p className="text-xs text-gray-500 text-center">
-                * Image is displayed in Linear space (Gamma 1.0). It will appear dark. This is expected.
+                * Displaying: Arri LogC3 (Flat Look) | Pipeline: RAW &rarr; WB &rarr; Cam2ProPhoto &rarr; ProPhoto2Alexa &rarr; LogC3
             </p>
         </div>
       )}
