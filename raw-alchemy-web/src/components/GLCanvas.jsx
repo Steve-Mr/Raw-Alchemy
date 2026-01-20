@@ -1,7 +1,101 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 
-const GLCanvas = ({ width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType }) => {
+const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType }, ref) => {
   const canvasRef = useRef(null);
+
+  // Persist GL resources across renders
+  const glRef = useRef(null);
+  const programRef = useRef(null);
+  const textureRef = useRef(null);
+  const vaoRef = useRef(null);
+
+  // Expose method to capture high-res data
+  useImperativeHandle(ref, () => ({
+    captureHighRes: () => {
+      const gl = glRef.current;
+      const program = programRef.current;
+      const texture = textureRef.current;
+      const vao = vaoRef.current;
+
+      if (!gl || !program || !texture || !vao) {
+          throw new Error("WebGL context or resources not initialized");
+      }
+
+      // 1. Create Floating Point Framebuffer
+      const fb = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+
+      // 2. Create Target Texture (RGBA32F) for High Precision
+      const targetTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, targetTex);
+      // Use RGBA32F for full float precision capture
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, width, height, 0, gl.RGBA, gl.FLOAT, null);
+
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+      // Attach texture to FBO
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, targetTex, 0);
+
+      const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+      if (status !== gl.FRAMEBUFFER_COMPLETE) {
+          console.error("Framebuffer incomplete:", status);
+          return null;
+      }
+
+      // 3. Render to FBO
+      gl.viewport(0, 0, width, height);
+      gl.useProgram(program);
+      gl.bindVertexArray(vao);
+
+      // Bind Input Texture (Source Raw Data)
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, texture); // The input raw texture
+
+      // Update Uniforms (Ensure they match current props)
+      gl.uniform1f(gl.getUniformLocation(program, 'u_maxVal'), bitDepth === 16 ? 65535.0 : 255.0);
+      gl.uniform1i(gl.getUniformLocation(program, 'u_channels'), channels);
+      gl.uniform1i(gl.getUniformLocation(program, 'u_image'), 0);
+
+      const wb = wbMultipliers || [1.0, 1.0, 1.0];
+      gl.uniform3f(gl.getUniformLocation(program, 'u_wb_multipliers'), wb[0], wb[1], wb[2]);
+
+      const identity = new Float32Array([1,0,0, 0,1,0, 0,0,1]);
+      gl.uniformMatrix3fv(gl.getUniformLocation(program, 'u_cam_to_prophoto'), true, camToProPhotoMatrix || identity);
+      gl.uniformMatrix3fv(gl.getUniformLocation(program, 'u_prophoto_to_target'), true, proPhotoToTargetMatrix || identity);
+      gl.uniform1i(gl.getUniformLocation(program, 'u_log_curve_type'), logCurveType !== undefined ? logCurveType : 0);
+
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+      // 4. Read Pixels (Float32)
+      // We read 3 components if possible, but ReadPixels often requires RGBA for FLOAT
+      const pixelData = new Float32Array(width * height * 4);
+      gl.readPixels(0, 0, width, height, gl.RGBA, gl.FLOAT, pixelData);
+
+      // 5. Cleanup
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.deleteFramebuffer(fb);
+      gl.deleteTexture(targetTex);
+
+      // 6. Convert RGBA -> RGB (Strip Alpha)
+      // We do this here or in worker? Doing it in worker saves main thread time.
+      // But we are passing Float32Array to worker anyway.
+      // Let's optimize transfer: Strip Alpha here? Or just send RGBA and let worker stride?
+      // Sending 33% extra data (Alpha) is okay for memory vs CPU on main thread.
+      // Wait, 16-bit TIFF expects RGB.
+      // Let's strip here to save Transferable size? No, `readPixels` is the bottleneck.
+      // Let's send the RGBA buffer and tell worker to skip 4th channel.
+
+      return {
+          width,
+          height,
+          data: pixelData,
+          channels: 4 // It's RGBA now
+      };
+    }
+  }));
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -19,6 +113,8 @@ const GLCanvas = ({ width, height, data, channels, bitDepth, wbMultipliers, camT
       console.error("WebGL 2.0 not supported");
       return;
     }
+
+    glRef.current = gl;
 
     // Enable extensions
     gl.getExtension('EXT_color_buffer_float');
@@ -282,6 +378,8 @@ const GLCanvas = ({ width, height, data, channels, bitDepth, wbMultipliers, camT
             throw new Error("Program failed to link");
         }
 
+        programRef.current = program;
+
         // --- GEOMETRY ---
         positionBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
@@ -292,6 +390,8 @@ const GLCanvas = ({ width, height, data, channels, bitDepth, wbMultipliers, camT
         const positionLoc = gl.getAttribLocation(program, 'a_position');
         gl.enableVertexAttribArray(positionLoc);
         gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
+
+        vaoRef.current = vao;
 
         // --- TEXTURE ---
         texture = gl.createTexture();
@@ -329,6 +429,8 @@ const GLCanvas = ({ width, height, data, channels, bitDepth, wbMultipliers, camT
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
+        textureRef.current = texture;
+
         // --- RENDER ---
         gl.viewport(0, 0, width, height);
         gl.useProgram(program);
@@ -363,11 +465,16 @@ const GLCanvas = ({ width, height, data, channels, bitDepth, wbMultipliers, camT
         if (fs) gl.deleteShader(fs);
         if (positionBuffer) gl.deleteBuffer(positionBuffer);
         if (vao) gl.deleteVertexArray(vao);
+
+        glRef.current = null;
+        programRef.current = null;
+        textureRef.current = null;
+        vaoRef.current = null;
     };
 
   }, [width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType]);
 
   return <canvas ref={canvasRef} className="max-w-full shadow-lg border border-gray-300" />;
-};
+});
 
 export default GLCanvas;
