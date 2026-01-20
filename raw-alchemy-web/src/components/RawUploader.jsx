@@ -178,51 +178,16 @@ const RawUploader = () => {
               };
 
               // 3. Send to Worker (Transferable)
-              // Note: 'data' is a Float32Array (RGBA), containing 4 channels.
-              // We need to strip Alpha or let worker do it.
-              // To keep main thread fast, we just send it.
-              // However, TIFF needs 3 channels.
-              // Let's strip it HERE to reduce transfer size?
-              // Actually, looping 24MP * 4 in JS on main thread is slow (approx 100MB).
-              // Better to send the whole thing to worker and let it loop ONCE to do (Clip + Scale + Strip Alpha).
-              // But 'data' contains R,G,B,A, R,G,B,A...
-              // Worker expects Interleaved RGB?
-              // The worker I wrote: "const len = data.length; ... uint16Data[i] = ..."
-              // Wait, my worker implementation assumes the input `data` maps 1:1 to output pixels?
-              // NO. My worker implementation `export.worker.js` just loops `i < len`.
-              // If I send RGBA, it will produce a TIFF with 4 channels if I'm not careful, OR it will just produce garbage if the TIFF encoder expects RGB (3 channels) but gets a flat array of 4 channels.
-              // `encodeTiff` takes `width`, `height`, `data`. It writes `width * height * 3` values.
-              // If I send RGBA array to `encodeTiff`, `data` will be larger than `w*h*3`.
-              // `pixelView.set(data)` will fail if sizes don't match, or it will just write the first 75% of data (if buffer is small) or write RGBA data into RGB slots (messing up colors).
-
-              // FIX: I MUST strip the alpha channel.
-              // Doing it in worker is best for UI.
-              // I will update the WORKER to handle RGBA input -> RGB output.
-              // BUT, for now, let's strip it here quickly or update the worker code.
-              // Updating the worker code is cleaner.
-              // However, I cannot easily update the worker code in this 'step' (I'm editing RawUploader).
-              // Let's strip it here. It's a typed array operation.
-              // actually, `GLCanvas` returned RGBA.
-              // Let's modify the Loop in main thread? No.
-              // Let's use a trick: WebGL can read pixels as RGB?
-              // `gl.readPixels(..., gl.RGB, ...)`?
-              // WebGL 2 spec says: INVALID_OPERATION if format is RGB and implementation doesn't support it.
-              // Usually ReadPixels supports RGBA only for float.
-              // Okay, I will strip it here.
-              // Optimized strip:
-              const pixelCount = width * height;
-              const rgbData = new Float32Array(pixelCount * 3);
-              for (let i = 0; i < pixelCount; i++) {
-                  rgbData[i * 3 + 0] = data[i * 4 + 0];
-                  rgbData[i * 3 + 1] = data[i * 4 + 1];
-                  rgbData[i * 3 + 2] = data[i * 4 + 2];
-              }
+              // We pass the raw RGBA Float32Array directly to the worker to avoid main thread freeze.
+              // We rely on Transferable objects for zero-copy.
 
               exportWorkerRef.current.postMessage({
                   width,
                   height,
-                  data: rgbData
-              }, [rgbData.buffer]);
+                  data: data, // RGBA Float32Array
+                  channels: 4,
+                  logSpace: targetLogSpace // Pass the log space name to the worker
+              }, [data.buffer]);
 
           } catch (err) {
               console.error(err);

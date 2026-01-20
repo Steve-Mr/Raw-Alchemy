@@ -6,19 +6,27 @@
  * @param {number} width - Image width
  * @param {number} height - Image height
  * @param {Uint16Array} data - Interleaved RGB data (R, G, B, R, G, B...)
+ * @param {string} [description] - Optional image description (e.g., Log Space name)
  * @returns {ArrayBuffer} - The TIFF file binary
  */
-export function encodeTiff(width, height, data) {
+export function encodeTiff(width, height, data, description = "") {
     const headerSize = 8;
-    const ifdEntryCount = 12;
+    // IFD Entries: 12 base + 1 optional (ImageDescription)
+    const hasDesc = description && description.length > 0;
+    const ifdEntryCount = hasDesc ? 13 : 12;
     const ifdSize = 2 + (ifdEntryCount * 12) + 4; // Count + Entries + NextOffset
 
-    // Extra values storage (BitsPerSample, XRes, YRes)
+    // Extra values storage (BitsPerSample, XRes, YRes, DescriptionString)
     // BitsPerSample: 3 * 2 bytes = 6 bytes
     // XResolution: 2 * 4 bytes = 8 bytes (Rational)
     // YResolution: 2 * 4 bytes = 8 bytes (Rational)
-    // Total Extra = 22 bytes
-    const extraValuesSize = 22;
+    // Description: Length + 1 (null terminator)
+    // Total Extra = 22 bytes + Description Bytes
+    const descBytes = hasDesc ? new TextEncoder().encode(description + "\0") : new Uint8Array(0);
+    // Align description to 2 bytes (Short alignment) - Optional but good practice?
+    // TIFF strings are just bytes.
+
+    const extraValuesSize = 22 + descBytes.length + (descBytes.length % 2); // Padding for word alignment if needed
 
     const pixelDataSize = data.byteLength;
     const totalSize = headerSize + ifdSize + extraValuesSize + pixelDataSize;
@@ -39,6 +47,12 @@ export function encodeTiff(width, height, data) {
     // --- 2. IFD ---
     // We calculate offsets for "Extra Values" which come after IFD
     const extraValuesOffset = headerSize + ifdSize;
+    // Pointers into Extra Values Block
+    const bitsPerSampleOffset = extraValuesOffset;
+    const xResOffset = extraValuesOffset + 6;
+    const yResOffset = extraValuesOffset + 14;
+    const descOffset = extraValuesOffset + 22;
+
     const pixelDataOffset = extraValuesOffset + extraValuesSize;
 
     const writeTag = (tagId, type, count, valueOrOffset) => {
@@ -55,40 +69,46 @@ export function encodeTiff(width, height, data) {
     view.setUint16(offset, ifdEntryCount, true); // Number of entries
     offset += 2;
 
-    // Tag 256: ImageWidth (Type 4: Long)
+    // Tags must be sorted by ID!
+    // 256: ImageWidth
     writeTag(256, 4, 1, width);
 
-    // Tag 257: ImageLength (Type 4: Long)
+    // 257: ImageLength
     writeTag(257, 4, 1, height);
 
-    // Tag 258: BitsPerSample (Type 3: Short, Count 3) -> Pointer to extra values
-    writeTag(258, 3, 3, extraValuesOffset);
+    // 258: BitsPerSample
+    writeTag(258, 3, 3, bitsPerSampleOffset);
 
-    // Tag 259: Compression (Type 3: Short) -> 1 (Uncompressed)
+    // 259: Compression
     writeTag(259, 3, 1, 1);
 
-    // Tag 262: PhotometricInterpretation (Type 3: Short) -> 2 (RGB)
+    // 262: PhotometricInterpretation
     writeTag(262, 3, 1, 2);
 
-    // Tag 273: StripOffsets (Type 4: Long) -> Pointer to pixel data
+    // 270: ImageDescription (Optional) - Inserted here to maintain sort order (270 < 273)
+    if (hasDesc) {
+        writeTag(270, 2, descBytes.length, descOffset); // Type 2 = ASCII
+    }
+
+    // 273: StripOffsets
     writeTag(273, 4, 1, pixelDataOffset);
 
-    // Tag 277: SamplesPerPixel (Type 3: Short) -> 3
+    // 277: SamplesPerPixel
     writeTag(277, 3, 1, 3);
 
-    // Tag 278: RowsPerStrip (Type 4: Long) -> Height (One strip)
+    // 278: RowsPerStrip
     writeTag(278, 4, 1, height);
 
-    // Tag 279: StripByteCounts (Type 4: Long) -> Size of pixel data
+    // 279: StripByteCounts
     writeTag(279, 4, 1, pixelDataSize);
 
-    // Tag 282: XResolution (Type 5: Rational) -> Pointer to extra values + 6
-    writeTag(282, 5, 1, extraValuesOffset + 6);
+    // 282: XResolution
+    writeTag(282, 5, 1, xResOffset);
 
-    // Tag 283: YResolution (Type 5: Rational) -> Pointer to extra values + 14
-    writeTag(283, 5, 1, extraValuesOffset + 14);
+    // 283: YResolution
+    writeTag(283, 5, 1, yResOffset);
 
-    // Tag 296: ResolutionUnit (Type 3: Short) -> 2 (Inch)
+    // 296: ResolutionUnit
     writeTag(296, 3, 1, 2);
 
     // Next IFD Offset (0 = None)
@@ -109,11 +129,23 @@ export function encodeTiff(width, height, data) {
     view.setUint32(offset, 300, true); offset += 4;
     view.setUint32(offset, 1, true); offset += 4;
 
+    // Description String (if exists)
+    if (hasDesc) {
+        const descView = new Uint8Array(buffer, offset, descBytes.length);
+        descView.set(descBytes);
+        offset += descBytes.length;
+        // Padding if odd (though we calculated totalSize with modulo, so buffer is big enough)
+        if (descBytes.length % 2 !== 0) {
+            view.setUint8(offset, 0); // Pad with null
+            offset += 1;
+        }
+    }
+
     // --- 4. Pixel Data ---
     // Copy the Uint16Array data into the buffer
-    // Since 'data' is Uint16Array, we can copy its buffer directly or set values.
-    // However, data.buffer might be larger (offset), so using set is safer or typed array set.
-    const pixelView = new Uint16Array(buffer, offset, width * height * 3);
+    // Align offset to start of pixel data (should be accurate if calculations are correct)
+    // Just to be safe, use pixelDataOffset relative to buffer start
+    const pixelView = new Uint16Array(buffer, pixelDataOffset, width * height * 3);
     pixelView.set(data);
 
     return buffer;
