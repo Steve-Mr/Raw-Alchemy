@@ -27,7 +27,7 @@ jobs:
           apt-get install -y wget build-essential libssl-dev zlib1g-dev \
             libbz2-dev libreadline-dev libsqlite3-dev curl llvm \
             libncurses5-dev libncursesw5-dev xz-utils tk-dev libffi-dev \
-            liblzma-dev git
+            liblzma-dev git pkg-config
 
       - name: Build and Install Python 3.12
         run: |
@@ -43,6 +43,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python3 -m pip install --upgrade pip setuptools wheel
+          python3 -m pip install cython numpy
           pip3 install .
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
