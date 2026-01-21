@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import GLCanvas from './GLCanvas';
 import { calculateCamToProPhoto, getProPhotoToTargetMatrix, formatMatrixForUniform, LOG_SPACE_CONFIG } from '../utils/colorMath';
 import { calculateAutoExposure } from '../utils/metering';
+import { parseCubeLUT } from '../utils/lutParser';
 
 const RawUploader = () => {
   const [loading, setLoading] = useState(false);
@@ -9,6 +10,11 @@ const RawUploader = () => {
   const [imageState, setImageState] = useState(null); // { data, width, height, channels, bitDepth, mode }
   const [mode, setMode] = useState('rgb'); // 'rgb' or 'bayer'
   const [metadata, setMetadata] = useState(null);
+
+  // LUT State
+  const [lutData, setLutData] = useState(null);
+  const [lutSize, setLutSize] = useState(null);
+  const [lutName, setLutName] = useState(null);
 
   // Pipeline State
   const [wbRed, setWbRed] = useState(1.0);
@@ -235,6 +241,35 @@ const RawUploader = () => {
     }
   };
 
+  const handleLutSelect = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+          try {
+              const text = event.target.result;
+              const { size, data, title } = parseCubeLUT(text);
+              setLutData(data);
+              setLutSize(size);
+              setLutName(title === 'Untitled LUT' ? file.name : title);
+              console.log(`LUT Loaded: ${file.name} (Size: ${size}^3, Points: ${data.length / 3})`);
+          } catch (err) {
+              console.error("LUT Parse Error:", err);
+              setError("Failed to load LUT: " + err.message);
+          }
+      };
+      reader.readAsText(file);
+      // Reset input value so same file can be selected again
+      e.target.value = '';
+  };
+
+  const handleRemoveLut = () => {
+      setLutData(null);
+      setLutSize(null);
+      setLutName(null);
+  };
+
   return (
     <div className="p-4 border rounded shadow bg-white max-w-4xl mx-auto mt-4">
       <div className="flex justify-between items-center mb-4">
@@ -384,6 +419,49 @@ const RawUploader = () => {
                           {exporting ? 'Encoding TIFF...' : 'Export 16-bit TIFF'}
                       </button>
 
+                      {/* LUT Controls */}
+                      <div className="mt-6 border-t pt-4">
+                          <h4 className="text-sm font-semibold text-gray-600 mb-2">3D LUT (.cube)</h4>
+                          <div className="mb-2">
+                              {lutName ? (
+                                  <div className="flex items-center justify-between bg-blue-50 p-2 rounded border border-blue-200">
+                                      <div className="truncate text-xs font-medium text-blue-800 pr-2" title={lutName}>
+                                          {lutName}
+                                      </div>
+                                      <button
+                                          onClick={handleRemoveLut}
+                                          className="text-red-500 hover:text-red-700 text-xs font-bold px-1"
+                                      >
+                                          ✕
+                                      </button>
+                                  </div>
+                              ) : (
+                                  <input
+                                      type="file"
+                                      accept=".cube"
+                                      onChange={handleLutSelect}
+                                      className="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
+                                  />
+                              )}
+                          </div>
+                          <p className="text-[10px] text-gray-400">
+                             Applied after Log encoding. Standard Adobe .cube supported.
+                          </p>
+                      </div>
+
+                      {/* Export Button */}
+                      <div className="mt-6">
+                          <button
+                              onClick={handleExport}
+                              disabled={exporting}
+                              className={`w-full py-2 px-4 rounded font-bold text-white transition-colors
+                                  ${exporting ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 shadow-md'}
+                              `}
+                          >
+                              {exporting ? 'Encoding TIFF...' : 'Export 16-bit TIFF'}
+                          </button>
+                      </div>
+
                       {/* Metadata Debug */}
                       <div className="text-xs font-mono text-gray-500 overflow-auto h-20 bg-gray-100 p-2 rounded mt-4">
                           <strong>Metadata Extraction:</strong>
@@ -451,10 +529,12 @@ const RawUploader = () => {
                     exposure={exposure}
                     saturation={saturation}
                     contrast={contrast}
+                    lutData={lutData}
+                    lutSize={lutSize}
                 />
             </div>
             <p className="text-xs text-gray-500 text-center">
-                * Displaying: {targetLogSpace} | Pipeline: RAW &rarr; WB &rarr; Cam2ProPhoto &rarr; ProPhoto2Target &rarr; {targetLogSpace} Curve
+                * Displaying: {targetLogSpace} | Pipeline: RAW &rarr; WB &rarr; Cam2ProPhoto &rarr; ProPhoto2Target &rarr; {targetLogSpace} Curve {lutData ? '→ 3D LUT' : ''}
             </p>
         </div>
       )}

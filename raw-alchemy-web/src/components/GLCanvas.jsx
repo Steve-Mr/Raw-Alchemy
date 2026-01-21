@@ -1,12 +1,13 @@
 import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 
-const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, exposure, saturation, contrast }, ref) => {
+const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, exposure, saturation, contrast, lutData, lutSize }, ref) => {
   const canvasRef = useRef(null);
 
   // Persist GL resources across renders
   const glRef = useRef(null);
   const programRef = useRef(null);
   const textureRef = useRef(null);
+  const lutTextureRef = useRef(null);
   const vaoRef = useRef(null);
 
   // Expose method to capture high-res data
@@ -15,6 +16,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
       const gl = glRef.current;
       const program = programRef.current;
       const texture = textureRef.current;
+      const lutTexture = lutTextureRef.current;
       const vao = vaoRef.current;
 
       if (!gl || !program || !texture || !vao) {
@@ -53,6 +55,17 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
       // Bind Input Texture (Source Raw Data)
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, texture); // The input raw texture
+
+      // Bind LUT Texture
+      if (lutData && lutSize && lutTexture) {
+          gl.activeTexture(gl.TEXTURE1);
+          gl.bindTexture(gl.TEXTURE_3D, lutTexture);
+          gl.uniform1i(gl.getUniformLocation(program, 'u_lut3d'), 1);
+          gl.uniform1i(gl.getUniformLocation(program, 'u_use_lut'), 1);
+          gl.uniform1f(gl.getUniformLocation(program, 'u_lut_size'), lutSize);
+      } else {
+          gl.uniform1i(gl.getUniformLocation(program, 'u_use_lut'), 0);
+      }
 
       // Update Uniforms (Ensure they match current props)
       gl.uniform1f(gl.getUniformLocation(program, 'u_maxVal'), bitDepth === 16 ? 65535.0 : 255.0);
@@ -118,6 +131,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
 
     // Enable extensions
     gl.getExtension('EXT_color_buffer_float');
+    gl.getExtension('OES_texture_float_linear'); // For Linear Filtering on LUTs
 
     // --- SHADERS ---
     const vsSource = `#version 300 es
@@ -133,11 +147,17 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
     const fsSource = `#version 300 es
       precision highp float;
       precision highp usampler2D;
+      precision highp sampler3D;
 
       in vec2 v_texCoord;
       uniform usampler2D u_image;
       uniform float u_maxVal;
       uniform int u_channels;
+
+      // LUT Uniforms
+      uniform mediump sampler3D u_lut3d;
+      uniform int u_use_lut;
+      uniform float u_lut_size;
 
       // Stage 1: WB
       uniform vec3 u_wb_multipliers;
@@ -166,6 +186,17 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
 
       vec3 applyContrast(vec3 color, float contrast) {
           return (color - 0.18) * contrast + 0.18;
+      }
+
+      // Apply 3D LUT with Half-Texel Correction
+      vec3 applyLUT(vec3 color) {
+          // Half-texel correction for accurate sampling
+          // uv = input * ((size - 1.0) / size) + (0.5 / size)
+          vec3 scale = vec3((u_lut_size - 1.0) / u_lut_size);
+          vec3 offset = vec3(0.5 / u_lut_size);
+
+          vec3 coord = color * scale + offset;
+          return texture(u_lut3d, coord).rgb;
       }
 
       // Helper for log10 (must be defined before usage)
@@ -370,7 +401,13 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
         // --- STAGE 4: To Target Log Curve ---
         vec3 log_image = applyLogCurve(target_linear, u_log_curve_type);
 
-        outColor = vec4(log_image, 1.0);
+        // --- STAGE 5: Apply LUT ---
+        vec3 final_color = log_image;
+        if (u_use_lut == 1) {
+            final_color = applyLUT(log_image);
+        }
+
+        outColor = vec4(final_color, 1.0);
       }
     `;
 
@@ -462,6 +499,24 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
 
         textureRef.current = texture;
 
+        // --- 3D LUT TEXTURE ---
+        let lutTexture = null;
+        if (lutData && lutSize) {
+            lutTexture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_3D, lutTexture);
+            // RGB32F for high precision LUT
+            gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGB32F, lutSize, lutSize, lutSize, 0, gl.RGB, gl.FLOAT, lutData);
+
+            // Linear interpolation is crucial for LUTs
+            gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+
+            lutTextureRef.current = lutTexture;
+        }
+
         // --- RENDER ---
         gl.viewport(0, 0, width, height);
         gl.useProgram(program);
@@ -470,6 +525,17 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
         gl.uniform1f(gl.getUniformLocation(program, 'u_maxVal'), bitDepth === 16 ? 65535.0 : 255.0);
         gl.uniform1i(gl.getUniformLocation(program, 'u_channels'), channels);
         gl.uniform1i(gl.getUniformLocation(program, 'u_image'), 0);
+
+        // Bind LUT (Texture Unit 1)
+        if (lutTexture && lutData) {
+           gl.activeTexture(gl.TEXTURE1);
+           gl.bindTexture(gl.TEXTURE_3D, lutTexture);
+           gl.uniform1i(gl.getUniformLocation(program, 'u_lut3d'), 1); // Bind to Texture Unit 1
+           gl.uniform1i(gl.getUniformLocation(program, 'u_use_lut'), 1);
+           gl.uniform1f(gl.getUniformLocation(program, 'u_lut_size'), lutSize);
+        } else {
+           gl.uniform1i(gl.getUniformLocation(program, 'u_use_lut'), 0);
+        }
 
         // Color Pipeline Uniforms
         const wb = wbMultipliers || [1.0, 1.0, 1.0];
@@ -496,6 +562,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
     // --- CLEANUP ---
     return () => {
         if (texture) gl.deleteTexture(texture);
+        if (lutTexture) gl.deleteTexture(lutTexture);
         if (program) gl.deleteProgram(program);
         if (vs) gl.deleteShader(vs);
         if (fs) gl.deleteShader(fs);
@@ -505,10 +572,11 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
         glRef.current = null;
         programRef.current = null;
         textureRef.current = null;
+        lutTextureRef.current = null;
         vaoRef.current = null;
     };
 
-  }, [width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType]);
+  }, [width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, lutData, lutSize]);
 
   return <canvas ref={canvasRef} className="max-w-full shadow-lg border border-gray-300" />;
 });
