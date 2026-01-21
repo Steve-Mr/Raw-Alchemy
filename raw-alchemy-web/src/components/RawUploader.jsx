@@ -57,7 +57,14 @@ const RawUploader = () => {
   useEffect(() => {
       if (metadata) {
           // 1. Calculate Cam -> ProPhoto
-          const rawMatrix = metadata.rgb_cam || metadata.cam_xyz;
+          // Prioritize cam_xyz (Camera to XYZ) as this is the standard path.
+          // rgb_cam (sRGB to Camera) is mathematically incorrect for this pipeline without inversion.
+          const rawMatrix = metadata.cam_xyz;
+
+          if (!rawMatrix) {
+              console.warn("Missing cam_xyz matrix. Color accuracy will be degraded.");
+          }
+
           const c2p = calculateCamToProPhoto(rawMatrix);
           setCamToProPhotoMat(formatMatrixForUniform(c2p));
 
