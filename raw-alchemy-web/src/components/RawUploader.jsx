@@ -57,15 +57,9 @@ const RawUploader = () => {
   useEffect(() => {
       if (metadata) {
           // 1. Calculate Cam -> ProPhoto
-          // Prioritize cam_xyz (Camera to XYZ) as this is the standard path.
-          // rgb_cam (sRGB to Camera) is mathematically incorrect for this pipeline without inversion.
-          const rawMatrix = metadata.cam_xyz;
-
-          if (!rawMatrix) {
-              console.warn("Missing cam_xyz matrix. Color accuracy will be degraded.");
-          }
-
-          const c2p = calculateCamToProPhoto(rawMatrix);
+          // The Worker is now configured to output ProPhoto RGB (outputColor: 4).
+          // So the "Camera to ProPhoto" step in the shader should be an Identity Matrix.
+          const c2p = [1,0,0, 0,1,0, 0,0,1];
           setCamToProPhotoMat(formatMatrixForUniform(c2p));
 
           // 2. Calculate ProPhoto -> Target Log Gamut

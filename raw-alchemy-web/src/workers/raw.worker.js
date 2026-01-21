@@ -17,13 +17,13 @@ self.onmessage = async (e) => {
       // Open the file with specific settings for Linear Camera Space
       // settings reference: https://github.com/ybouane/LibRaw-Wasm
       const settings = {
-        outputColor: 0,      // -o 0: Raw Color (Camera Native Space)
+        outputColor: 4,      // -o 4: ProPhoto RGB (Linear)
         outputBps: 16,       // -4: 16-bit
         noAutoBright: true,  // -W: Don't apply auto brightness (crucial for linearity)
         gamm: [1.0, 1.0],    // -g 1 1: Linear Gamma
-        useCameraWb: false,  // -w: Disable camera WB
+        useCameraWb: true,   // -w: Use Camera WB (As Shot)
         useAutoWb: false,    // -a: Disable auto WB
-        userMul: [1.0, 1.0, 1.0, 1.0], // -r 1 1 1 1: Unit WB (Pass-through for shader WB)
+        userMul: [1.0, 1.0, 1.0, 1.0], // -r 1 1 1 1: Unit WB
         // Ensure interpolation is ON (default) for 'rgb' mode
       };
 
