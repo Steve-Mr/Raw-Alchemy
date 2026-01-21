@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import GLCanvas from './GLCanvas';
 import { calculateCamToProPhoto, getProPhotoToTargetMatrix, formatMatrixForUniform, LOG_SPACE_CONFIG } from '../utils/colorMath';
+import { calculateAutoExposure } from '../utils/metering';
 
 const RawUploader = () => {
   const [loading, setLoading] = useState(false);
@@ -18,6 +19,7 @@ const RawUploader = () => {
   const [exposure, setExposure] = useState(0.0);
   const [saturation, setSaturation] = useState(1.25);
   const [contrast, setContrast] = useState(1.1);
+  const [meteringMode, setMeteringMode] = useState('hybrid');
 
   const [camToProPhotoMat, setCamToProPhotoMat] = useState(null);
   const [proPhotoToTargetMat, setProPhotoToTargetMat] = useState(null);
@@ -64,6 +66,24 @@ const RawUploader = () => {
       }
   }, [metadata, targetLogSpace]);
 
+  // Effect: Calculate Auto-Exposure whenever Image Loaded or Mode Changed
+  useEffect(() => {
+      if (imageState && imageState.mode === 'rgb' && imageState.data) {
+          console.log(`Metering: Calculating ${meteringMode}...`);
+          // Use setTimeout to allow UI to render spinner if needed (though calc is fast)
+          // Since it's fast (subsampled), we run sync to avoid flicker
+          const ev = calculateAutoExposure(
+              imageState.data,
+              imageState.width,
+              imageState.height,
+              meteringMode,
+              imageState.bitDepth
+          );
+          console.log(`Metering: ${ev.toFixed(2)} EV`);
+          setExposure(ev);
+      }
+  }, [imageState, meteringMode]);
+
 
   const handleProcess = async (fileToProcess, selectedMode) => {
     if (!fileToProcess) return;
@@ -81,15 +101,10 @@ const RawUploader = () => {
     workerRef.current = new Worker(new URL('../workers/raw.worker.js', import.meta.url), { type: 'module' });
 
     workerRef.current.onmessage = (e) => {
-      const { type, data, width, height, channels, bitDepth, error: workerError, mode: resultMode, meta, recommendedExposure } = e.data;
+      const { type, data, width, height, channels, bitDepth, error: workerError, mode: resultMode, meta } = e.data;
 
       if (type === 'success') {
         setMetadata(meta); // Save metadata for pipeline
-
-        // Auto-Exposure Update
-        if (recommendedExposure !== undefined) {
-            setExposure(recommendedExposure);
-        }
 
         // Reset WB Sliders to Neutral (since Worker applied As-Shot WB)
         setWbRed(1.0);
@@ -293,7 +308,22 @@ const RawUploader = () => {
                           </div>
                       </div>
 
-                      <h4 className="text-sm font-semibold text-gray-600 mb-2">Basic Adjustments</h4>
+                      <div className="flex justify-between items-center mb-2">
+                          <h4 className="text-sm font-semibold text-gray-600">Basic Adjustments</h4>
+                          <select
+                              value={meteringMode}
+                              onChange={(e) => setMeteringMode(e.target.value)}
+                              className="text-xs border border-gray-300 rounded p-1"
+                              title="Metering Mode"
+                          >
+                              <option value="hybrid">Hybrid (Default)</option>
+                              <option value="matrix">Matrix</option>
+                              <option value="center-weighted">Center Weighted</option>
+                              <option value="highlight-safe">Highlight Safe</option>
+                              <option value="average">Average</option>
+                          </select>
+                      </div>
+
                       <div className="space-y-2">
                           <div>
                               <label className="block text-xs text-gray-500">Exposure (EV): {exposure.toFixed(2)}</label>
