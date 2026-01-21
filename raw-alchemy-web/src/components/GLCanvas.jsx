@@ -417,6 +417,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
     let positionBuffer = null;
     let vao = null;
     let texture = null;
+    let lutTexture = null; // Defined here to be accessible in cleanup
 
     try {
         const createShader = (type, source) => {
@@ -500,7 +501,6 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
         textureRef.current = texture;
 
         // --- 3D LUT TEXTURE ---
-        let lutTexture = null;
         if (lutData && lutSize) {
             lutTexture = gl.createTexture();
             gl.bindTexture(gl.TEXTURE_3D, lutTexture);
