@@ -14,6 +14,11 @@ const RawUploader = () => {
   const [wbBlue, setWbBlue] = useState(1.0);
   const [wbGreen, setWbGreen] = useState(1.0); // Usually kept at 1.0 or derived
 
+  // Basic Adjustments State
+  const [exposure, setExposure] = useState(0.0);
+  const [saturation, setSaturation] = useState(1.25);
+  const [contrast, setContrast] = useState(1.1);
+
   const [camToProPhotoMat, setCamToProPhotoMat] = useState(null);
   const [proPhotoToTargetMat, setProPhotoToTargetMat] = useState(null);
   const [targetLogSpace, setTargetLogSpace] = useState('Arri LogC3');
@@ -43,15 +48,6 @@ const RawUploader = () => {
           // Ideally, we set WB only when metadata *first* arrives.
       }
   }, [metadata]);
-
-  // Separate effect for WB initialization to avoid overwriting user edits on other updates
-  useEffect(() => {
-    if (metadata && metadata.cam_mul) {
-         setWbRed(metadata.cam_mul[0]);
-         setWbBlue(metadata.cam_mul[2]);
-         setWbGreen(metadata.cam_mul[1]);
-    }
-  }, [metadata]); // Runs only when metadata object reference changes (new file loaded)
 
   // Effect to recalculate matrices whenever metadata OR targetLogSpace changes
   useEffect(() => {
@@ -85,10 +81,21 @@ const RawUploader = () => {
     workerRef.current = new Worker(new URL('../workers/raw.worker.js', import.meta.url), { type: 'module' });
 
     workerRef.current.onmessage = (e) => {
-      const { type, data, width, height, channels, bitDepth, error: workerError, mode: resultMode, meta } = e.data;
+      const { type, data, width, height, channels, bitDepth, error: workerError, mode: resultMode, meta, recommendedExposure } = e.data;
 
       if (type === 'success') {
         setMetadata(meta); // Save metadata for pipeline
+
+        // Auto-Exposure Update
+        if (recommendedExposure !== undefined) {
+            setExposure(recommendedExposure);
+        }
+
+        // Reset WB Sliders to Neutral (since Worker applied As-Shot WB)
+        setWbRed(1.0);
+        setWbGreen(1.0);
+        setWbBlue(1.0);
+
         setImageState({
           data,
           width,
@@ -255,8 +262,8 @@ const RawUploader = () => {
               <div className="grid grid-cols-2 gap-6">
                   {/* WB Controls */}
                   <div>
-                      <h4 className="text-sm font-semibold text-gray-600 mb-2">White Balance (Multipliers)</h4>
-                      <div className="space-y-2">
+                      <h4 className="text-sm font-semibold text-gray-600 mb-2">White Balance (Fine Tune)</h4>
+                      <div className="space-y-2 mb-4">
                           <div>
                               <label className="block text-xs text-gray-500">Red Gain: {wbRed.toFixed(3)}</label>
                               <input
@@ -267,7 +274,7 @@ const RawUploader = () => {
                               />
                           </div>
                           <div>
-                              <label className="block text-xs text-gray-500">Green Gain: {wbGreen.toFixed(3)} (Ref)</label>
+                              <label className="block text-xs text-gray-500">Green Gain: {wbGreen.toFixed(3)}</label>
                               <input
                                   type="range" min="0.1" max="5.0" step="0.01"
                                   value={wbGreen}
@@ -281,6 +288,37 @@ const RawUploader = () => {
                                   type="range" min="0.1" max="5.0" step="0.01"
                                   value={wbBlue}
                                   onChange={(e) => setWbBlue(parseFloat(e.target.value))}
+                                  className="w-full"
+                              />
+                          </div>
+                      </div>
+
+                      <h4 className="text-sm font-semibold text-gray-600 mb-2">Basic Adjustments</h4>
+                      <div className="space-y-2">
+                          <div>
+                              <label className="block text-xs text-gray-500">Exposure (EV): {exposure.toFixed(2)}</label>
+                              <input
+                                  type="range" min="-5.0" max="5.0" step="0.1"
+                                  value={exposure}
+                                  onChange={(e) => setExposure(parseFloat(e.target.value))}
+                                  className="w-full"
+                              />
+                          </div>
+                          <div>
+                              <label className="block text-xs text-gray-500">Saturation: {saturation.toFixed(2)}</label>
+                              <input
+                                  type="range" min="0.0" max="2.0" step="0.05"
+                                  value={saturation}
+                                  onChange={(e) => setSaturation(parseFloat(e.target.value))}
+                                  className="w-full"
+                              />
+                          </div>
+                          <div>
+                              <label className="block text-xs text-gray-500">Contrast: {contrast.toFixed(2)}</label>
+                              <input
+                                  type="range" min="0.5" max="1.5" step="0.05"
+                                  value={contrast}
+                                  onChange={(e) => setContrast(parseFloat(e.target.value))}
                                   className="w-full"
                               />
                           </div>
@@ -380,6 +418,9 @@ const RawUploader = () => {
                     camToProPhotoMatrix={camToProPhotoMat}
                     proPhotoToTargetMatrix={proPhotoToTargetMat}
                     logCurveType={LOG_SPACE_CONFIG[targetLogSpace] ? LOG_SPACE_CONFIG[targetLogSpace].id : 0}
+                    exposure={exposure}
+                    saturation={saturation}
+                    contrast={contrast}
                 />
             </div>
             <p className="text-xs text-gray-500 text-center">

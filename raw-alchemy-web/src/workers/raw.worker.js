@@ -141,6 +141,55 @@ self.onmessage = async (e) => {
         console.log(`Worker: RGB data ready. ${width}x${height} ${bitDepth}-bit`);
       }
 
+      // Calculate Auto Exposure
+      let recommendedExposure = 0.0;
+      if (mode === 'rgb' && outputData) {
+          try {
+              // ProPhoto RGB Luma Coefficients
+              const R_COEFF = 0.288040;
+              const G_COEFF = 0.711874;
+              const B_COEFF = 0.000086;
+              const TARGET_GRAY = 0.18;
+
+              let sumLuma = 0.0;
+              let count = 0;
+
+              // Center 50% Crop
+              const startX = Math.floor(width * 0.25);
+              const endX = Math.floor(width * 0.75);
+              const startY = Math.floor(height * 0.25);
+              const endY = Math.floor(height * 0.75);
+              const stride = 10; // Sample every 10th pixel for speed
+
+              for (let y = startY; y < endY; y += stride) {
+                  for (let x = startX; x < endX; x += stride) {
+                      const idx = (y * width + x) * channels;
+                      const r = outputData[idx];
+                      const g = outputData[idx + 1];
+                      const b = outputData[idx + 2];
+
+                      // Calculate Luminance
+                      sumLuma += (r * R_COEFF + g * G_COEFF + b * B_COEFF);
+                      count++;
+                  }
+              }
+
+              if (count > 0) {
+                  const avgLuma = sumLuma / count;
+                  // Normalize if 16-bit
+                  const maxVal = bitDepth === 16 ? 65535.0 : 255.0;
+                  const normalizedLuma = avgLuma / maxVal;
+
+                  if (normalizedLuma > 0) {
+                       recommendedExposure = Math.log2(TARGET_GRAY / normalizedLuma);
+                  }
+                  console.log(`Worker: Metering - AvgLuma: ${normalizedLuma.toFixed(5)}, RecExp: ${recommendedExposure.toFixed(2)} EV`);
+              }
+          } catch (ex) {
+              console.warn("Worker: Metering failed", ex);
+          }
+      }
+
       // Transfer the result back
       self.postMessage({
         type: 'success',
@@ -151,7 +200,8 @@ self.onmessage = async (e) => {
         channels,
         bitDepth,
         mode,
-        meta // Pass metadata for Matrix/WB extraction
+        meta, // Pass metadata for Matrix/WB extraction
+        recommendedExposure
       }, [outputData.buffer]);
 
     } catch (err) {

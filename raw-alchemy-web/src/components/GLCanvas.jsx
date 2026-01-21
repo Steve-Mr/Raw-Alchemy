@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 
-const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType }, ref) => {
+const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, exposure, saturation, contrast }, ref) => {
   const canvasRef = useRef(null);
 
   // Persist GL resources across renders
@@ -149,7 +149,24 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
       // Stage 4: Log Curve Selection
       uniform int u_log_curve_type;
 
+      // New Uniforms for Pipeline Parity
+      uniform float u_exposure;
+      uniform float u_saturation;
+      uniform float u_contrast;
+
       out vec4 outColor;
+
+      // Helper for Saturation and Contrast
+      vec3 applySaturation(vec3 color, float saturation) {
+          // ProPhoto Luma Coefficients
+          const vec3 lumaCoef = vec3(0.288040, 0.711874, 0.000086);
+          float luminance = dot(color, lumaCoef);
+          return mix(vec3(luminance), color, saturation);
+      }
+
+      vec3 applyContrast(vec3 color, float contrast) {
+          return (color - 0.18) * contrast + 0.18;
+      }
 
       // Helper for log10 (must be defined before usage)
       float log10(float x) {
@@ -324,11 +341,25 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
           linear_cam = vec3(rawVal.rgb) / u_maxVal;
         }
 
-        // --- STAGE 1: Input & WB (Camera Space) ---
+        // --- STAGE 1: Input & WB ---
+        // Input is now ProPhoto (due to Worker config), but shader structure considers it "Input".
+        // u_wb_multipliers should be 1.0 ideally, or user fine-tuning.
         vec3 wb_cam = linear_cam * u_wb_multipliers;
 
-        // --- STAGE 2: To Working Space (ProPhoto RGB) ---
+        // --- STAGE 2: Camera Space -> ProPhoto ---
+        // This is Identity now.
         vec3 prophoto_linear = u_cam_to_prophoto * wb_cam;
+
+        // --- NEW STAGE 2.5: Exposure, Saturation, Contrast (Boost) ---
+
+        // 1. Exposure
+        prophoto_linear *= pow(2.0, u_exposure);
+
+        // 2. Saturation
+        prophoto_linear = applySaturation(prophoto_linear, u_saturation);
+
+        // 3. Contrast
+        prophoto_linear = applyContrast(prophoto_linear, u_contrast);
 
         // --- STAGE 3: To Target Gamut (Linear) ---
         vec3 target_linear = u_prophoto_to_target * prophoto_linear;
@@ -450,6 +481,11 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
 
         // Log Curve Type (Default to 0: Arri LogC3)
         gl.uniform1i(gl.getUniformLocation(program, 'u_log_curve_type'), logCurveType !== undefined ? logCurveType : 0);
+
+        // Basic Adjustments
+        gl.uniform1f(gl.getUniformLocation(program, 'u_exposure'), exposure !== undefined ? exposure : 0.0);
+        gl.uniform1f(gl.getUniformLocation(program, 'u_saturation'), saturation !== undefined ? saturation : 1.0);
+        gl.uniform1f(gl.getUniformLocation(program, 'u_contrast'), contrast !== undefined ? contrast : 1.0);
 
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
