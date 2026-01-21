@@ -17,13 +17,13 @@ self.onmessage = async (e) => {
       // Open the file with specific settings for Linear Camera Space
       // settings reference: https://github.com/ybouane/LibRaw-Wasm
       const settings = {
-        outputColor: 0,      // -o 0: Raw Color (Camera Native Space)
+        outputColor: 4,      // -o 4: ProPhoto RGB (Linear)
         outputBps: 16,       // -4: 16-bit
         noAutoBright: true,  // -W: Don't apply auto brightness (crucial for linearity)
         gamm: [1.0, 1.0],    // -g 1 1: Linear Gamma
-        useCameraWb: false,  // -w: Disable camera WB
+        useCameraWb: true,   // -w: Use Camera WB (As Shot)
         useAutoWb: false,    // -a: Disable auto WB
-        userMul: [1.0, 1.0, 1.0, 1.0], // -r 1 1 1 1: Unit WB (Pass-through for shader WB)
+        userMul: [1.0, 1.0, 1.0, 1.0], // -r 1 1 1 1: Unit WB
         // Ensure interpolation is ON (default) for 'rgb' mode
       };
 
@@ -39,14 +39,50 @@ self.onmessage = async (e) => {
       await decoder.open(new Uint8Array(fileBuffer), settings);
       console.log("Worker: File opened successfully");
 
-      // Get Metadata
-      const meta = await decoder.metadata();
+      // Get Metadata (Verbose for color matrices)
+      const meta = await decoder.metadata(true);
       console.log("Worker: Metadata retrieved", meta);
 
-      // Extract specific Color Metadata
-      // Note: Keys might vary, we pass the whole useful parts
-      // Typically: 'cam_mul' (WB), 'cam_xyz' or 'rgb_cam' (Matrix)
-      // We will let the main thread inspect 'meta' structure.
+      // Helper to flatten nested arrays
+      const flattenMatrix = (mat) => {
+          if (!mat || !Array.isArray(mat)) return mat;
+          if (mat.length > 0 && Array.isArray(mat[0])) {
+             const flat = [];
+             for(let i=0; i<mat.length; i++) {
+                 if(Array.isArray(mat[i])) {
+                     for(let j=0; j<mat[i].length; j++) {
+                         flat.push(mat[i][j]);
+                     }
+                 } else {
+                     flat.push(mat[i]);
+                 }
+             }
+             return flat;
+          }
+          return mat;
+      };
+
+      // Extract and normalize Color Metadata from known paths
+      // 1. cam_xyz (Camera to XYZ)
+      if (meta.color_data && meta.color_data.cam_xyz) {
+          meta.cam_xyz = flattenMatrix(meta.color_data.cam_xyz);
+      }
+
+      // 2. rgb_cam (sRGB to Camera - usually)
+      if (meta.color_data && meta.color_data.rgb_cam) {
+          meta.rgb_cam = flattenMatrix(meta.color_data.rgb_cam);
+      }
+
+      // 3. cam_mul (White Balance)
+      if (meta.color_data && meta.color_data.cam_mul) {
+          meta.cam_mul = meta.color_data.cam_mul;
+      }
+
+      console.log("Worker: Normalized Metadata:", {
+          cam_xyz: meta.cam_xyz,
+          rgb_cam: meta.rgb_cam,
+          cam_mul: meta.cam_mul
+      });
 
       let outputData;
       let width = meta.width;

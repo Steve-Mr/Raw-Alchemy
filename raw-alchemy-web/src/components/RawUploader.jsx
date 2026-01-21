@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import GLCanvas from './GLCanvas';
 import { calculateCamToProPhoto, getProPhotoToTargetMatrix, formatMatrixForUniform, LOG_SPACE_CONFIG } from '../utils/colorMath';
+import { calculateAutoExposure } from '../utils/metering';
 
 const RawUploader = () => {
   const [loading, setLoading] = useState(false);
@@ -13,6 +14,12 @@ const RawUploader = () => {
   const [wbRed, setWbRed] = useState(1.0);
   const [wbBlue, setWbBlue] = useState(1.0);
   const [wbGreen, setWbGreen] = useState(1.0); // Usually kept at 1.0 or derived
+
+  // Basic Adjustments State
+  const [exposure, setExposure] = useState(0.0);
+  const [saturation, setSaturation] = useState(1.25);
+  const [contrast, setContrast] = useState(1.1);
+  const [meteringMode, setMeteringMode] = useState('hybrid');
 
   const [camToProPhotoMat, setCamToProPhotoMat] = useState(null);
   const [proPhotoToTargetMat, setProPhotoToTargetMat] = useState(null);
@@ -44,21 +51,13 @@ const RawUploader = () => {
       }
   }, [metadata]);
 
-  // Separate effect for WB initialization to avoid overwriting user edits on other updates
-  useEffect(() => {
-    if (metadata && metadata.cam_mul) {
-         setWbRed(metadata.cam_mul[0]);
-         setWbBlue(metadata.cam_mul[2]);
-         setWbGreen(metadata.cam_mul[1]);
-    }
-  }, [metadata]); // Runs only when metadata object reference changes (new file loaded)
-
   // Effect to recalculate matrices whenever metadata OR targetLogSpace changes
   useEffect(() => {
       if (metadata) {
           // 1. Calculate Cam -> ProPhoto
-          const rawMatrix = metadata.rgb_cam || metadata.cam_xyz;
-          const c2p = calculateCamToProPhoto(rawMatrix);
+          // The Worker is now configured to output ProPhoto RGB (outputColor: 4).
+          // So the "Camera to ProPhoto" step in the shader should be an Identity Matrix.
+          const c2p = [1,0,0, 0,1,0, 0,0,1];
           setCamToProPhotoMat(formatMatrixForUniform(c2p));
 
           // 2. Calculate ProPhoto -> Target Log Gamut
@@ -66,6 +65,24 @@ const RawUploader = () => {
           setProPhotoToTargetMat(formatMatrixForUniform(p2t));
       }
   }, [metadata, targetLogSpace]);
+
+  // Effect: Calculate Auto-Exposure whenever Image Loaded or Mode Changed
+  useEffect(() => {
+      if (imageState && imageState.mode === 'rgb' && imageState.data) {
+          console.log(`Metering: Calculating ${meteringMode}...`);
+          // Use setTimeout to allow UI to render spinner if needed (though calc is fast)
+          // Since it's fast (subsampled), we run sync to avoid flicker
+          const ev = calculateAutoExposure(
+              imageState.data,
+              imageState.width,
+              imageState.height,
+              meteringMode,
+              imageState.bitDepth
+          );
+          console.log(`Metering: ${ev.toFixed(2)} EV`);
+          setExposure(ev);
+      }
+  }, [imageState, meteringMode]);
 
 
   const handleProcess = async (fileToProcess, selectedMode) => {
@@ -88,6 +105,12 @@ const RawUploader = () => {
 
       if (type === 'success') {
         setMetadata(meta); // Save metadata for pipeline
+
+        // Reset WB Sliders to Neutral (since Worker applied As-Shot WB)
+        setWbRed(1.0);
+        setWbGreen(1.0);
+        setWbBlue(1.0);
+
         setImageState({
           data,
           width,
@@ -254,8 +277,8 @@ const RawUploader = () => {
               <div className="grid grid-cols-2 gap-6">
                   {/* WB Controls */}
                   <div>
-                      <h4 className="text-sm font-semibold text-gray-600 mb-2">White Balance (Multipliers)</h4>
-                      <div className="space-y-2">
+                      <h4 className="text-sm font-semibold text-gray-600 mb-2">White Balance (Fine Tune)</h4>
+                      <div className="space-y-2 mb-4">
                           <div>
                               <label className="block text-xs text-gray-500">Red Gain: {wbRed.toFixed(3)}</label>
                               <input
@@ -266,7 +289,7 @@ const RawUploader = () => {
                               />
                           </div>
                           <div>
-                              <label className="block text-xs text-gray-500">Green Gain: {wbGreen.toFixed(3)} (Ref)</label>
+                              <label className="block text-xs text-gray-500">Green Gain: {wbGreen.toFixed(3)}</label>
                               <input
                                   type="range" min="0.1" max="5.0" step="0.01"
                                   value={wbGreen}
@@ -280,6 +303,52 @@ const RawUploader = () => {
                                   type="range" min="0.1" max="5.0" step="0.01"
                                   value={wbBlue}
                                   onChange={(e) => setWbBlue(parseFloat(e.target.value))}
+                                  className="w-full"
+                              />
+                          </div>
+                      </div>
+
+                      <div className="flex justify-between items-center mb-2">
+                          <h4 className="text-sm font-semibold text-gray-600">Basic Adjustments</h4>
+                          <select
+                              value={meteringMode}
+                              onChange={(e) => setMeteringMode(e.target.value)}
+                              className="text-xs border border-gray-300 rounded p-1"
+                              title="Metering Mode"
+                          >
+                              <option value="hybrid">Hybrid (Default)</option>
+                              <option value="matrix">Matrix</option>
+                              <option value="center-weighted">Center Weighted</option>
+                              <option value="highlight-safe">Highlight Safe</option>
+                              <option value="average">Average</option>
+                          </select>
+                      </div>
+
+                      <div className="space-y-2">
+                          <div>
+                              <label className="block text-xs text-gray-500">Exposure (EV): {exposure.toFixed(2)}</label>
+                              <input
+                                  type="range" min="-5.0" max="5.0" step="0.1"
+                                  value={exposure}
+                                  onChange={(e) => setExposure(parseFloat(e.target.value))}
+                                  className="w-full"
+                              />
+                          </div>
+                          <div>
+                              <label className="block text-xs text-gray-500">Saturation: {saturation.toFixed(2)}</label>
+                              <input
+                                  type="range" min="0.0" max="2.0" step="0.05"
+                                  value={saturation}
+                                  onChange={(e) => setSaturation(parseFloat(e.target.value))}
+                                  className="w-full"
+                              />
+                          </div>
+                          <div>
+                              <label className="block text-xs text-gray-500">Contrast: {contrast.toFixed(2)}</label>
+                              <input
+                                  type="range" min="0.5" max="1.5" step="0.05"
+                                  value={contrast}
+                                  onChange={(e) => setContrast(parseFloat(e.target.value))}
                                   className="w-full"
                               />
                           </div>
@@ -379,6 +448,9 @@ const RawUploader = () => {
                     camToProPhotoMatrix={camToProPhotoMat}
                     proPhotoToTargetMatrix={proPhotoToTargetMat}
                     logCurveType={LOG_SPACE_CONFIG[targetLogSpace] ? LOG_SPACE_CONFIG[targetLogSpace].id : 0}
+                    exposure={exposure}
+                    saturation={saturation}
+                    contrast={contrast}
                 />
             </div>
             <p className="text-xs text-gray-500 text-center">
