@@ -527,13 +527,19 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
         gl.uniform1i(gl.getUniformLocation(program, 'u_image'), 0);
 
         // Bind LUT (Texture Unit 1)
+        // CRITICAL: Always bind u_lut3d to Unit 1 to avoid Sampler Conflict with u_image (Unit 0),
+        // even if u_use_lut is 0. WebGL requires samplers to point to unique units if active.
+        gl.uniform1i(gl.getUniformLocation(program, 'u_lut3d'), 1);
+
         if (lutTexture && lutData) {
            gl.activeTexture(gl.TEXTURE1);
            gl.bindTexture(gl.TEXTURE_3D, lutTexture);
-           gl.uniform1i(gl.getUniformLocation(program, 'u_lut3d'), 1); // Bind to Texture Unit 1
            gl.uniform1i(gl.getUniformLocation(program, 'u_use_lut'), 1);
            gl.uniform1f(gl.getUniformLocation(program, 'u_lut_size'), lutSize);
         } else {
+           // Bind null to Texture Unit 1 just to be safe, though usually not strictly required if not sampled
+           gl.activeTexture(gl.TEXTURE1);
+           gl.bindTexture(gl.TEXTURE_3D, null);
            gl.uniform1i(gl.getUniformLocation(program, 'u_use_lut'), 0);
         }
 
