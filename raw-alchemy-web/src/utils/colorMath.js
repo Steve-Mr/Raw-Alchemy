@@ -24,51 +24,6 @@ export const multiplyMatrices = (a, b) => {
     return result;
 };
 
-/**
- * Standard XYZ to ProPhoto RGB (ROMM RGB) Matrix
- * Linear transformation.
- * Source: http://www.brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
- * (Reference D50 White Point)
- */
-const XYZ_TO_PROPHOTO_MAT = [
-    1.3459433, -0.2556075, -0.0511118,
-   -0.5445989,  1.5081673,  0.0205351,
-    0.0000000,  0.0000000,  1.2118128
-];
-
-/**
- * Calculates Camera RGB -> ProPhoto RGB Matrix
- * Formula: M_cam_to_prophoto = M_xyz_to_prophoto * M_cam_to_xyz
- *
- * @param {number[]} camToXyz - 3x3 or 4x3 matrix from LibRaw (Camera -> XYZ).
- *                               LibRaw often provides 4x3 (rows=3, cols=4) where last col is 0.
- *                               We expect a flat array.
- * @returns {number[]} - 3x3 Matrix for shader (Camera -> ProPhoto)
- */
-export const calculateCamToProPhoto = (camToXyz) => {
-    if (!camToXyz || camToXyz.length < 9) {
-        console.warn("Invalid Camera Matrix, using Identity");
-        return [1,0,0, 0,1,0, 0,0,1];
-    }
-
-    let m3x3 = [];
-    if (camToXyz.length === 9) {
-        m3x3 = camToXyz;
-    } else if (camToXyz.length === 12) {
-        // Assume 4x3 row-major: [m00, m01, m02, 0, m10, m11, m12, 0, ...]
-        m3x3 = [
-            camToXyz[0], camToXyz[1], camToXyz[2],
-            camToXyz[4], camToXyz[5], camToXyz[6],
-            camToXyz[8], camToXyz[9], camToXyz[10]
-        ];
-    } else {
-         // Fallback
-         m3x3 = camToXyz.slice(0, 9);
-    }
-
-    return multiplyMatrices(XYZ_TO_PROPHOTO_MAT, m3x3);
-};
-
 // --- LOG SPACE DEFINITIONS ---
 
 // Log Curve IDs for Shader

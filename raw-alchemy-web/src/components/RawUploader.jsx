@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import GLCanvas from './GLCanvas';
-import { calculateCamToProPhoto, getProPhotoToTargetMatrix, formatMatrixForUniform, LOG_SPACE_CONFIG } from '../utils/colorMath';
+import { getProPhotoToTargetMatrix, formatMatrixForUniform, LOG_SPACE_CONFIG } from '../utils/colorMath';
 import { calculateAutoExposure } from '../utils/metering';
 import { parseCubeLUT } from '../utils/lutParser';
 
@@ -23,6 +23,7 @@ const RawUploader = () => {
 
   // Basic Adjustments State
   const [exposure, setExposure] = useState(0.0);
+  // Default Saturation (1.25) and Contrast (1.1) match the Python 'Camera-Match Boost' logic
   const [saturation, setSaturation] = useState(1.25);
   const [contrast, setContrast] = useState(1.1);
   const [meteringMode, setMeteringMode] = useState('hybrid');
