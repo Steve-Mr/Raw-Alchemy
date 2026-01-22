@@ -17,10 +17,6 @@ const RawUploader = () => {
   const [lutName, setLutName] = useState(null);
 
   // Pipeline State
-  const [wbRed, setWbRed] = useState(1.0);
-  const [wbBlue, setWbBlue] = useState(1.0);
-  const [wbGreen, setWbGreen] = useState(1.0); // Usually kept at 1.0 or derived
-
   // Basic Adjustments State
   const [exposure, setExposure] = useState(0.0);
   // Default Saturation (1.25) and Contrast (1.1) match the Python 'Camera-Match Boost' logic
@@ -45,18 +41,6 @@ const RawUploader = () => {
       exportWorkerRef.current?.terminate();
     };
   }, []);
-
-  // Update matrices when metadata or target log space changes
-  useEffect(() => {
-      if (metadata) {
-          // 1. Initialize WB Sliders from Metadata (As Shot)
-          // Only if sliders haven't been moved manually?
-          // For now, let's keep it reactive to metadata load only (not resetting on every render)
-          // We can't distinguish "initial load" easily without more state, but this effect runs on metadata change.
-          // We should be careful not to overwrite user changes if metadata doesn't change.
-          // Ideally, we set WB only when metadata *first* arrives.
-      }
-  }, [metadata]);
 
   // Effect to recalculate matrices whenever metadata OR targetLogSpace changes
   useEffect(() => {
@@ -112,11 +96,6 @@ const RawUploader = () => {
 
       if (type === 'success') {
         setMetadata(meta); // Save metadata for pipeline
-
-        // Reset WB Sliders to Neutral (since Worker applied As-Shot WB)
-        setWbRed(1.0);
-        setWbGreen(1.0);
-        setWbBlue(1.0);
 
         setImageState({
           data,
@@ -311,39 +290,7 @@ const RawUploader = () => {
               <h3 className="text-md font-bold text-gray-700 mb-3">Color Pipeline Controls</h3>
 
               <div className="grid grid-cols-2 gap-6">
-                  {/* WB Controls */}
                   <div>
-                      <h4 className="text-sm font-semibold text-gray-600 mb-2">White Balance (Fine Tune)</h4>
-                      <div className="space-y-2 mb-4">
-                          <div>
-                              <label className="block text-xs text-gray-500">Red Gain: {wbRed.toFixed(3)}</label>
-                              <input
-                                  type="range" min="0.1" max="5.0" step="0.01"
-                                  value={wbRed}
-                                  onChange={(e) => setWbRed(parseFloat(e.target.value))}
-                                  className="w-full"
-                              />
-                          </div>
-                          <div>
-                              <label className="block text-xs text-gray-500">Green Gain: {wbGreen.toFixed(3)}</label>
-                              <input
-                                  type="range" min="0.1" max="5.0" step="0.01"
-                                  value={wbGreen}
-                                  onChange={(e) => setWbGreen(parseFloat(e.target.value))}
-                                  className="w-full"
-                              />
-                          </div>
-                          <div>
-                              <label className="block text-xs text-gray-500">Blue Gain: {wbBlue.toFixed(3)}</label>
-                              <input
-                                  type="range" min="0.1" max="5.0" step="0.01"
-                                  value={wbBlue}
-                                  onChange={(e) => setWbBlue(parseFloat(e.target.value))}
-                                  className="w-full"
-                              />
-                          </div>
-                      </div>
-
                       <div className="flex justify-between items-center mb-2">
                           <h4 className="text-sm font-semibold text-gray-600">Basic Adjustments</h4>
                           <select
@@ -523,7 +470,7 @@ const RawUploader = () => {
                     data={imageState.data}
                     channels={imageState.channels}
                     bitDepth={imageState.bitDepth}
-                    wbMultipliers={[wbRed, wbGreen, wbBlue]}
+                    wbMultipliers={[1.0, 1.0, 1.0]} // Pass neutral WB (identity) as Worker handles As-Shot WB
                     camToProPhotoMatrix={camToProPhotoMat}
                     proPhotoToTargetMatrix={proPhotoToTargetMat}
                     logCurveType={LOG_SPACE_CONFIG[targetLogSpace] ? LOG_SPACE_CONFIG[targetLogSpace].id : 0}
