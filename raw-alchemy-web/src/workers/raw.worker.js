@@ -15,24 +15,41 @@ self.onmessage = async (e) => {
       console.log(`Worker: Processing started (Mode: ${mode})`);
 
       // Open the file with specific settings for Linear Camera Space
-      // settings reference: https://github.com/ybouane/LibRaw-Wasm
+      // We use redundant keys (camelCase and snake_case) to ensure the wrapper
+      // respects the settings regardless of the specific build version conventions.
       const settings = {
-        outputColor: 4,      // -o 4: ProPhoto RGB (Linear)
-        outputBps: 16,       // -4: 16-bit
-        noAutoBright: true,  // -W: Don't apply auto brightness (crucial for linearity)
-        gamm: [1.0, 1.0],    // -g 1 1: Linear Gamma
-        useCameraWb: true,   // -w: Use Camera WB (As Shot)
-        useAutoWb: false,    // -a: Disable auto WB
-        userMul: [1.0, 1.0, 1.0, 1.0], // -r 1 1 1 1: Unit WB
-        // Ensure interpolation is ON (default) for 'rgb' mode
+        // Color Space: ProPhoto RGB
+        outputColor: 4,
+        output_color: 4,
+
+        // Bit Depth: 16-bit
+        outputBps: 16,
+        output_bps: 16,
+
+        // Gamma: Strict Linear (1.0, 1.0)
+        // CRITICAL: Prevent default sRGB Gamma 2.2 fallback which causes "washed out" look
+        gamm: [1.0, 1.0],
+        gamma: [1.0, 1.0],
+
+        // Brightness/Saturation: Disable auto adjustments
+        noAutoBright: true,
+        no_auto_bright: true,
+        userSat: 0,
+        user_sat: 0,
+
+        // White Balance: Use Camera As-Shot
+        useCameraWb: true,
+        use_camera_wb: true,
+        useAutoWb: false,
+        use_auto_wb: false,
+
+        // Multipliers: Unit (fallback if WB fails, to avoid green tint if applied manually)
+        userMul: [1.0, 1.0, 1.0, 1.0],
+        user_mul: [1.0, 1.0, 1.0, 1.0],
       };
 
       if (mode === 'bayer') {
-          // For bayer mode, we might want different settings or just use runFn('unpack')
-          // But open() applies settings globally for the session usually.
-          // LibRaw-Wasm `open` takes settings.
-          // We keep settings for 'rgb' mode primarily.
-          // For bayer, we rely on unpack.
+          // For bayer mode, settings are less critical as we unpack raw data
       }
 
       console.log("Worker: Opening file with settings:", settings);
