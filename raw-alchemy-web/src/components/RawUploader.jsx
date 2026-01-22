@@ -498,7 +498,9 @@ const RawUploader = () => {
                                   <div>Max (White): {imgStats.max.toFixed(5)}</div>
                                   <div>Mean (Avg):  {imgStats.mean.toFixed(5)}</div>
                                   <div className="text-gray-400 mt-1">
-                                      * Low 'Min' (&lt;0.01) confirms correct Linear Gamma.
+                                      * Note: Log curves lift blacks (e.g., F-Log2 starts at ~0.0928).
+                                      <br/>
+                                      * A result matching the Log floor confirms correct Linear Input (0.0).
                                   </div>
                               </div>
                           )}
