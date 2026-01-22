@@ -27,9 +27,11 @@ self.onmessage = async (e) => {
         output_bps: 16,
 
         // Gamma: Strict Linear (1.0, 1.0)
-        // CRITICAL: Prevent default sRGB Gamma 2.2 fallback which causes "washed out" look
-        gamm: [1.0, 1.0],
-        gamma: [1.0, 1.0],
+        // CRITICAL: Prevent default sRGB Gamma 2.2 fallback which causes "washed out" look.
+        // The LibRaw WASM wrapper strictly checks for an array of length 6 for 'gamm'.
+        // Passing [1.0, 1.0] causes it to ignore the setting and use default Gamma 2.2.
+        gamm: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+        gamma: [1.0, 1.0], // Fallback if wrapper changes, but 'gamm' is the key in C++
 
         // Brightness/Saturation: Disable auto adjustments
         noAutoBright: true,
