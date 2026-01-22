@@ -24,51 +24,6 @@ export const multiplyMatrices = (a, b) => {
     return result;
 };
 
-/**
- * Standard XYZ to ProPhoto RGB (ROMM RGB) Matrix
- * Linear transformation.
- * Source: http://www.brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
- * (Reference D50 White Point)
- */
-const XYZ_TO_PROPHOTO_MAT = [
-    1.3459433, -0.2556075, -0.0511118,
-   -0.5445989,  1.5081673,  0.0205351,
-    0.0000000,  0.0000000,  1.2118128
-];
-
-/**
- * Calculates Camera RGB -> ProPhoto RGB Matrix
- * Formula: M_cam_to_prophoto = M_xyz_to_prophoto * M_cam_to_xyz
- *
- * @param {number[]} camToXyz - 3x3 or 4x3 matrix from LibRaw (Camera -> XYZ).
- *                               LibRaw often provides 4x3 (rows=3, cols=4) where last col is 0.
- *                               We expect a flat array.
- * @returns {number[]} - 3x3 Matrix for shader (Camera -> ProPhoto)
- */
-export const calculateCamToProPhoto = (camToXyz) => {
-    if (!camToXyz || camToXyz.length < 9) {
-        console.warn("Invalid Camera Matrix, using Identity");
-        return [1,0,0, 0,1,0, 0,0,1];
-    }
-
-    let m3x3 = [];
-    if (camToXyz.length === 9) {
-        m3x3 = camToXyz;
-    } else if (camToXyz.length === 12) {
-        // Assume 4x3 row-major: [m00, m01, m02, 0, m10, m11, m12, 0, ...]
-        m3x3 = [
-            camToXyz[0], camToXyz[1], camToXyz[2],
-            camToXyz[4], camToXyz[5], camToXyz[6],
-            camToXyz[8], camToXyz[9], camToXyz[10]
-        ];
-    } else {
-         // Fallback
-         m3x3 = camToXyz.slice(0, 9);
-    }
-
-    return multiplyMatrices(XYZ_TO_PROPHOTO_MAT, m3x3);
-};
-
 // --- LOG SPACE DEFINITIONS ---
 
 // Log Curve IDs for Shader
@@ -88,76 +43,77 @@ export const LOG_CURVE_IDS = {
 // Target Gamut Matrices: ProPhoto RGB (D50) -> Target Gamut (Usually D65)
 // Extracted from colour-science
 export const GAMUT_MATRICES = {
-    // Existing Arri LogC3 (Alexa Wide Gamut)
+    // ARRI Wide Gamut 3
     'Arri LogC3': [
-        0.840705, 0.160166, -0.000871,
-        -0.007699, 1.011893, -0.004194,
-        -0.003975, -0.004652, 0.830626
+        1.221468, -0.140818, -0.080781,
+        -0.108081, 0.924029, 0.184063,
+        -0.00585, 0.042834, 0.962778
     ],
     // F-Gamut
     'F-Log': [
-        1.202993, -0.065867, -0.137237,
-        -0.067143, 1.072331, -0.005128,
-        0.004014, -0.025219, 1.020950
+        1.200579, -0.057563, -0.143126,
+        -0.070019, 1.080712, -0.01063,
+        0.005544, -0.040786, 1.034982
     ],
-    // F-Gamut (Same for F-Log2 usually if using F-Gamut)
+    // F-Gamut
     'F-Log2': [
-        1.202993, -0.065867, -0.137237,
-        -0.067143, 1.072331, -0.005128,
-        0.004014, -0.025219, 1.020950
+        1.200579, -0.057563, -0.143126,
+        -0.070019, 1.080712, -0.01063,
+        0.005544, -0.040786, 1.034982
     ],
     // F-Gamut C
     'F-Log2 C': [
-        0.959089, 0.114254, -0.073433,
-        -0.003432, 0.910793, 0.092660,
-        0.002179, 0.003073, 0.994501
+        0.956749, 0.121682, -0.078519,
+        -0.005843, 0.916751, 0.089114,
+        0.003596, -0.011877, 1.008029
     ],
     // S-Gamut3
     'S-Log3': [
-        1.074478, -0.010574, -0.064015,
-        -0.025097, 0.903955, 0.121158,
-        0.011779, -0.000835, 0.988810
+        1.072271, -0.003649, -0.068732,
+        -0.027404, 0.909306, 0.118116,
+        0.013179, -0.015677, 1.002247
     ],
     // S-Gamut3.Cine
     'S-Log3.Cine': [
-        1.255519, -0.172182, -0.083473,
-        0.005015, 0.844135, 0.150852,
-        0.037232, 0.018431, 0.944100
+        1.253375, -0.165253, -0.088257,
+        0.002858, 0.848724, 0.148422,
+        0.038464, 0.004562, 0.956733
     ],
     // V-Gamut
     'V-Log': [
-        1.118011, -0.049443, -0.068685,
-        -0.026196, 0.930914, 0.095306,
-        0.011479, 0.006510, 0.981766
+        1.115819, -0.042517, -0.073417,
+        -0.028614, 0.936867, 0.091772,
+        0.01285, -0.008168, 0.995069
     ],
-    // Cinema Gamut (Canon)
+    // Cinema Gamut
     'Canon Log 2': [
-        1.057152, -0.023066, -0.034204,
-        -0.004980, 0.844191, 0.160790,
-        0.008557, 0.151855, 0.839386
+        1.055058, -0.016789, -0.038385,
+        -0.007104, 0.848575, 0.158531,
+        0.009321, 0.140483, 0.84999
     ],
+    // Cinema Gamut
     'Canon Log 3': [
-        1.057152, -0.023066, -0.034204,
-        -0.004980, 0.844191, 0.160790,
-        0.008557, 0.151855, 0.839386
+        1.055058, -0.016789, -0.038385,
+        -0.007104, 0.848575, 0.158531,
+        0.009321, 0.140483, 0.84999
     ],
-    // BT.2020 (N-Log, D-Log sometimes) - N-Log uses BT.2020 primaries
+    // ITU-R BT.2020
     'N-Log': [
-        1.202993, -0.065867, -0.137237,
-        -0.067143, 1.072331, -0.005128,
-        0.004014, -0.025219, 1.020950
+        1.200579, -0.057563, -0.143126,
+        -0.070019, 1.080712, -0.01063,
+        0.005544, -0.040786, 1.034982
     ],
-    // D-Gamut (DJI)
+    // DJI D-Gamut
     'D-Log': [
-        1.189488, -0.118310, -0.071278,
-        -0.079337, 0.919847, 0.159436,
-        0.014704, 0.065238, 0.920005
+        1.187343, -0.1115, -0.07594,
+        -0.081526, 0.924445, 0.157028,
+        0.015815, 0.051985, 0.932143
     ],
     // REDWideGamutRGB
     'Log3G10': [
-        1.021388, 0.027567, -0.049061,
-        -0.018345, 0.861719, 0.156631,
-        0.051044, 0.201081, 0.747693
+        1.019202, 0.034277, -0.053583,
+        -0.020497, 0.866232, 0.154271,
+        0.051454, 0.191729, 0.756633
     ]
 };
 
