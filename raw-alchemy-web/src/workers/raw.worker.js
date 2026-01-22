@@ -141,20 +141,7 @@ self.onmessage = async (e) => {
         console.log("Worker: Processing RGB (Linear Camera Space)...");
 
         // Settings were applied in open().
-        // However, we MUST explicitly unpack and process to ensure those settings (especially Gamma 1.0) are respected.
-        // Without this, LibRaw might fall back to defaults (Gamma 2.2, AutoBright) inside imageData().
-
-        try {
-            console.log("Worker: Unpacking RAW data...");
-            await decoder.runFn('unpack');
-
-            console.log("Worker: Developing image (dcraw_process)...");
-            // This applies Demosaic, Gamma, WB, Color Space, etc. based on 'settings' passed to open()
-            await decoder.runFn('dcraw_process');
-        } catch (procErr) {
-            console.error("Worker: RGB Processing Step Failed:", procErr);
-            throw new Error(`LibRaw Processing Failed: ${procErr.message}`);
-        }
+        // Just get the data.
 
         const result = await decoder.imageData();
 

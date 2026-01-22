@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 
-const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, exposure, saturation, contrast, lutData, lutSize }, ref) => {
+const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, exposure, saturation, contrast, inputGamma, lutData, lutSize }, ref) => {
   const canvasRef = useRef(null);
 
   // Persist GL resources across renders
@@ -204,6 +204,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
       uniform float u_exposure;
       uniform float u_saturation;
       uniform float u_contrast;
+      uniform float u_input_gamma;
 
       out vec4 outColor;
 
@@ -403,6 +404,11 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
           linear_cam = vec3(rawVal.rgb) / u_maxVal;
         }
 
+        // Apply Input Gamma Correction (Linearization) if needed
+        if (u_input_gamma > 1.0) {
+            linear_cam = pow(linear_cam, vec3(u_input_gamma));
+        }
+
         // --- STAGE 1: Input & WB ---
         // Input is now ProPhoto (due to Worker config), but shader structure considers it "Input".
         // u_wb_multipliers should be 1.0 ideally, or user fine-tuning.
@@ -589,6 +595,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
         gl.uniform1f(gl.getUniformLocation(program, 'u_exposure'), exposure !== undefined ? exposure : 0.0);
         gl.uniform1f(gl.getUniformLocation(program, 'u_saturation'), saturation !== undefined ? saturation : 1.0);
         gl.uniform1f(gl.getUniformLocation(program, 'u_contrast'), contrast !== undefined ? contrast : 1.0);
+        gl.uniform1f(gl.getUniformLocation(program, 'u_input_gamma'), inputGamma !== undefined ? inputGamma : 1.0);
 
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
@@ -613,7 +620,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
         vaoRef.current = null;
     };
 
-  }, [width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, lutData, lutSize]);
+  }, [width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, exposure, saturation, contrast, inputGamma, lutData, lutSize]);
 
   return <canvas ref={canvasRef} className="max-w-full shadow-lg border border-gray-300" />;
 });

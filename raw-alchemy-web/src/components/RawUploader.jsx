@@ -27,6 +27,7 @@ const RawUploader = () => {
   const [saturation, setSaturation] = useState(1.25);
   const [contrast, setContrast] = useState(1.1);
   const [meteringMode, setMeteringMode] = useState('hybrid');
+  const [inputGamma, setInputGamma] = useState(1.0); // 1.0 = Linear (default)
 
   const [camToProPhotoMat, setCamToProPhotoMat] = useState(null);
   const [proPhotoToTargetMat, setProPhotoToTargetMat] = useState(null);
@@ -396,6 +397,20 @@ const RawUploader = () => {
                                   className="w-full"
                               />
                           </div>
+                          <div className="pt-2 border-t mt-2">
+                               <label className="block text-xs text-blue-600 font-bold" title="Use 2.2 if image looks washed out">
+                                   Input Linearization (Gamma: {inputGamma.toFixed(1)})
+                               </label>
+                               <input
+                                   type="range" min="1.0" max="3.0" step="0.1"
+                                   value={inputGamma}
+                                   onChange={(e) => setInputGamma(parseFloat(e.target.value))}
+                                   className="w-full"
+                               />
+                               <p className="text-[10px] text-gray-400">
+                                   * If image is washed out, try setting to 2.2 or 1.8 to correct for missing linear decoding.
+                               </p>
+                          </div>
                       </div>
                   </div>
 
@@ -561,6 +576,7 @@ const RawUploader = () => {
                     exposure={exposure}
                     saturation={saturation}
                     contrast={contrast}
+                    inputGamma={inputGamma}
                     lutData={lutData}
                     lutSize={lutSize}
                 />
