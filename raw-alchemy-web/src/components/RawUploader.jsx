@@ -37,6 +37,7 @@ const RawUploader = () => {
   const workerRef = useRef(null);
   const exportWorkerRef = useRef(null);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [imgStats, setImgStats] = useState(null);
 
   // Terminate workers on component unmount
   useEffect(() => {
@@ -271,6 +272,13 @@ const RawUploader = () => {
       setLutName(null);
   };
 
+  const handleAnalyze = () => {
+      if (glCanvasRef.current) {
+          const stats = glCanvasRef.current.getStatistics();
+          setImgStats(stats);
+      }
+  };
+
   return (
     <div className="p-4 border rounded shadow bg-white max-w-4xl mx-auto mt-4">
       <div className="flex justify-between items-center mb-4">
@@ -473,6 +481,27 @@ const RawUploader = () => {
                               black: metadata.black,
                               white: metadata.maximum
                           }, null, 2) : 'No Metadata'}</pre>
+                      </div>
+
+                      {/* Image Analysis Tool */}
+                      <div className="mt-4 border-t pt-4">
+                          <h4 className="text-sm font-semibold text-gray-600 mb-2">Image Verification</h4>
+                          <button
+                              onClick={handleAnalyze}
+                              className="w-full py-1 px-3 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold rounded"
+                          >
+                              Analyze Image Stats
+                          </button>
+                          {imgStats && (
+                              <div className="mt-2 text-[10px] font-mono bg-gray-100 p-2 rounded">
+                                  <div>Min (Black): {imgStats.min.toFixed(5)}</div>
+                                  <div>Max (White): {imgStats.max.toFixed(5)}</div>
+                                  <div>Mean (Avg):  {imgStats.mean.toFixed(5)}</div>
+                                  <div className="text-gray-400 mt-1">
+                                      * Low 'Min' (&lt;0.01) confirms correct Linear Gamma.
+                                  </div>
+                              </div>
+                          )}
                       </div>
                   </div>
               </div>
