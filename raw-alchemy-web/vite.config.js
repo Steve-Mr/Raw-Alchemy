@@ -15,7 +15,7 @@ export default defineConfig({
       manifest: {
         name: 'Nitrate Grain',
         short_name: 'Nitrate Grain',
-        description: 'Advanced RAW Image Processing in the Browser',
+        description: 'A streamlined tool for RAW color space conversion, 3D LUT application, and essential adjustments.',
         theme_color: '#ffffff',
         background_color: '#ffffff',
         display: 'standalone',
@@ -26,18 +26,14 @@ export default defineConfig({
           {
             src: 'pwa-192x192.png',
             sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any'
           },
           {
             src: 'pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any maskable'
+            purpose: 'any'
           }
         ],
         share_target: {
