@@ -1,5 +1,8 @@
 {
-  "appTitle": "Raw Alchemy",
+  "appTitle": "Nitrate Grain",
+  "slogan": "Shadows with a pulse",
+  "appDescription": "用于 RAW 图像色彩空间转换、LUT 应用及基础调整的轻量化工具。",
+  "viewOnGithub": "查看 GitHub 仓库",
   "uploadPrompt": "选择 RAW 文件",
   "loadingDecoding": "解码中...",
   "exporting": "编码中...",
