@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 
-const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, exposure, saturation, contrast, lutData, lutSize }, ref) => {
+const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, exposure, saturation, contrast, inputGamma, lutData, lutSize }, ref) => {
   const canvasRef = useRef(null);
 
   // Persist GL resources across renders
@@ -10,9 +10,9 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
   const lutTextureRef = useRef(null);
   const vaoRef = useRef(null);
 
-  // Expose method to capture high-res data
-  useImperativeHandle(ref, () => ({
-    captureHighRes: () => {
+  // Expose methods to capture data and stats
+  useImperativeHandle(ref, () => {
+    const captureHighRes = () => {
       const gl = glRef.current;
       const program = programRef.current;
       const texture = textureRef.current;
@@ -54,7 +54,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
 
       // Bind Input Texture (Source Raw Data)
       gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, texture); // The input raw texture
+      gl.bindTexture(gl.TEXTURE_2D, texture);
 
       // Bind LUT Texture
       if (lutData && lutSize && lutTexture) {
@@ -67,7 +67,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
           gl.uniform1i(gl.getUniformLocation(program, 'u_use_lut'), 0);
       }
 
-      // Update Uniforms (Ensure they match current props)
+      // Update Uniforms
       gl.uniform1f(gl.getUniformLocation(program, 'u_maxVal'), bitDepth === 16 ? 65535.0 : 255.0);
       gl.uniform1i(gl.getUniformLocation(program, 'u_channels'), channels);
       gl.uniform1i(gl.getUniformLocation(program, 'u_image'), 0);
@@ -83,7 +83,6 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
       // 4. Read Pixels (Float32)
-      // We read 3 components if possible, but ReadPixels often requires RGBA for FLOAT
       const pixelData = new Float32Array(width * height * 4);
       gl.readPixels(0, 0, width, height, gl.RGBA, gl.FLOAT, pixelData);
 
@@ -92,23 +91,55 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
       gl.deleteFramebuffer(fb);
       gl.deleteTexture(targetTex);
 
-      // 6. Convert RGBA -> RGB (Strip Alpha)
-      // We do this here or in worker? Doing it in worker saves main thread time.
-      // But we are passing Float32Array to worker anyway.
-      // Let's optimize transfer: Strip Alpha here? Or just send RGBA and let worker stride?
-      // Sending 33% extra data (Alpha) is okay for memory vs CPU on main thread.
-      // Wait, 16-bit TIFF expects RGB.
-      // Let's strip here to save Transferable size? No, `readPixels` is the bottleneck.
-      // Let's send the RGBA buffer and tell worker to skip 4th channel.
-
       return {
           width,
           height,
           data: pixelData,
           channels: 4 // It's RGBA now
       };
-    }
-  }));
+    };
+
+    const getStatistics = () => {
+        try {
+            const result = captureHighRes();
+            if (!result || !result.data) return null;
+
+            const { data } = result;
+            let min = 100.0, max = -100.0, sum = 0.0;
+            let count = 0;
+
+            // Stride to improve performance
+            const step = Math.max(1, Math.floor(data.length / 400000));
+
+            for(let i = 0; i < data.length; i += step * 4) {
+                const r = data[i];
+                const g = data[i+1];
+                const b = data[i+2];
+                const val = (r + g + b) / 3.0;
+
+                if (val < min) min = val;
+                if (val > max) max = val;
+                sum += val;
+                count++;
+            }
+
+            return {
+                min,
+                max,
+                mean: sum / count,
+                sampleCount: count
+            };
+        } catch (e) {
+            console.error("Stats calculation failed:", e);
+            return null;
+        }
+    };
+
+    return {
+        captureHighRes,
+        getStatistics
+    };
+  });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -173,6 +204,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
       uniform float u_exposure;
       uniform float u_saturation;
       uniform float u_contrast;
+      uniform float u_input_gamma;
 
       out vec4 outColor;
 
@@ -372,6 +404,11 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
           linear_cam = vec3(rawVal.rgb) / u_maxVal;
         }
 
+        // Apply Input Gamma Correction (Linearization) if needed
+        if (u_input_gamma > 1.0) {
+            linear_cam = pow(linear_cam, vec3(u_input_gamma));
+        }
+
         // --- STAGE 1: Input & WB ---
         // Input is now ProPhoto (due to Worker config), but shader structure considers it "Input".
         // u_wb_multipliers should be 1.0 ideally, or user fine-tuning.
@@ -558,6 +595,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
         gl.uniform1f(gl.getUniformLocation(program, 'u_exposure'), exposure !== undefined ? exposure : 0.0);
         gl.uniform1f(gl.getUniformLocation(program, 'u_saturation'), saturation !== undefined ? saturation : 1.0);
         gl.uniform1f(gl.getUniformLocation(program, 'u_contrast'), contrast !== undefined ? contrast : 1.0);
+        gl.uniform1f(gl.getUniformLocation(program, 'u_input_gamma'), inputGamma !== undefined ? inputGamma : 1.0);
 
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
@@ -582,7 +620,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
         vaoRef.current = null;
     };
 
-  }, [width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, lutData, lutSize]);
+  }, [width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, exposure, saturation, contrast, inputGamma, lutData, lutSize]);
 
   return <canvas ref={canvasRef} className="max-w-full shadow-lg border border-gray-300" />;
 });

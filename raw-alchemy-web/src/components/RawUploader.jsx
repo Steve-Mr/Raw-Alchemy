@@ -27,6 +27,7 @@ const RawUploader = () => {
   const [saturation, setSaturation] = useState(1.25);
   const [contrast, setContrast] = useState(1.1);
   const [meteringMode, setMeteringMode] = useState('hybrid');
+  const [inputGamma, setInputGamma] = useState(1.0); // 1.0 = Linear (default)
 
   const [camToProPhotoMat, setCamToProPhotoMat] = useState(null);
   const [proPhotoToTargetMat, setProPhotoToTargetMat] = useState(null);
@@ -37,6 +38,7 @@ const RawUploader = () => {
   const workerRef = useRef(null);
   const exportWorkerRef = useRef(null);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [imgStats, setImgStats] = useState(null);
 
   // Terminate workers on component unmount
   useEffect(() => {
@@ -271,6 +273,13 @@ const RawUploader = () => {
       setLutName(null);
   };
 
+  const handleAnalyze = () => {
+      if (glCanvasRef.current) {
+          const stats = glCanvasRef.current.getStatistics();
+          setImgStats(stats);
+      }
+  };
+
   return (
     <div className="p-4 border rounded shadow bg-white max-w-4xl mx-auto mt-4">
       <div className="flex justify-between items-center mb-4">
@@ -388,6 +397,20 @@ const RawUploader = () => {
                                   className="w-full"
                               />
                           </div>
+                          <div className="pt-2 border-t mt-2">
+                               <label className="block text-xs text-blue-600 font-bold" title="Use 2.2 if image looks washed out">
+                                   Input Linearization (Gamma: {inputGamma.toFixed(1)})
+                               </label>
+                               <input
+                                   type="range" min="1.0" max="3.0" step="0.1"
+                                   value={inputGamma}
+                                   onChange={(e) => setInputGamma(parseFloat(e.target.value))}
+                                   className="w-full"
+                               />
+                               <p className="text-[10px] text-gray-400">
+                                   * If image is washed out, try setting to 2.2 or 1.8 to correct for missing linear decoding.
+                               </p>
+                          </div>
                       </div>
                   </div>
 
@@ -474,6 +497,29 @@ const RawUploader = () => {
                               white: metadata.maximum
                           }, null, 2) : 'No Metadata'}</pre>
                       </div>
+
+                      {/* Image Analysis Tool */}
+                      <div className="mt-4 border-t pt-4">
+                          <h4 className="text-sm font-semibold text-gray-600 mb-2">Image Verification</h4>
+                          <button
+                              onClick={handleAnalyze}
+                              className="w-full py-1 px-3 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold rounded"
+                          >
+                              Analyze Image Stats
+                          </button>
+                          {imgStats && (
+                              <div className="mt-2 text-[10px] font-mono bg-gray-100 p-2 rounded">
+                                  <div>Min (Black): {imgStats.min.toFixed(5)}</div>
+                                  <div>Max (White): {imgStats.max.toFixed(5)}</div>
+                                  <div>Mean (Avg):  {imgStats.mean.toFixed(5)}</div>
+                                  <div className="text-gray-400 mt-1">
+                                      * Note: Log curves lift blacks (e.g., F-Log2 starts at ~0.0928).
+                                      <br/>
+                                      * A result matching the Log floor confirms correct Linear Input (0.0).
+                                  </div>
+                              </div>
+                          )}
+                      </div>
                   </div>
               </div>
           </div>
@@ -530,6 +576,7 @@ const RawUploader = () => {
                     exposure={exposure}
                     saturation={saturation}
                     contrast={contrast}
+                    inputGamma={inputGamma}
                     lutData={lutData}
                     lutSize={lutSize}
                 />
