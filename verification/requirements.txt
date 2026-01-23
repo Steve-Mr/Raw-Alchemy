@@ -1,0 +1,8 @@
+numpy
+tifffile
+scikit-image
+matplotlib
+playwright
+imageio
+rawpy
+colour-science
