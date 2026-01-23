@@ -26,6 +26,13 @@ const RawUploader = () => {
   // Default Saturation (1.25) and Contrast (1.1) match the Python 'Camera-Match Boost' logic
   const [saturation, setSaturation] = useState(1.25);
   const [contrast, setContrast] = useState(1.1);
+
+  // Advanced Tone Mapping (Defaults to 0.0 - Neutral)
+  const [highlights, setHighlights] = useState(0.0);
+  const [shadows, setShadows] = useState(0.0);
+  const [whites, setWhites] = useState(0.0);
+  const [blacks, setBlacks] = useState(0.0);
+
   const [meteringMode, setMeteringMode] = useState('hybrid');
   const [inputGamma, setInputGamma] = useState(1.0); // 1.0 = Linear (default)
 
@@ -119,6 +126,12 @@ const RawUploader = () => {
         setWbRed(1.0);
         setWbGreen(1.0);
         setWbBlue(1.0);
+
+        // Reset Tone Controls
+        setHighlights(0.0);
+        setShadows(0.0);
+        setWhites(0.0);
+        setBlacks(0.0);
 
         setImageState({
           data,
@@ -380,20 +393,61 @@ const RawUploader = () => {
                               />
                           </div>
                           <div>
-                              <label className="block text-xs text-gray-500">Saturation: {saturation.toFixed(2)}</label>
-                              <input
-                                  type="range" min="0.0" max="2.0" step="0.05"
-                                  value={saturation}
-                                  onChange={(e) => setSaturation(parseFloat(e.target.value))}
-                                  className="w-full"
-                              />
-                          </div>
-                          <div>
                               <label className="block text-xs text-gray-500">Contrast: {contrast.toFixed(2)}</label>
                               <input
                                   type="range" min="0.5" max="1.5" step="0.05"
                                   value={contrast}
                                   onChange={(e) => setContrast(parseFloat(e.target.value))}
+                                  className="w-full"
+                              />
+                          </div>
+
+                          {/* Tone Mapping Controls */}
+                          <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                  <label className="block text-xs text-gray-500">Highlights: {highlights.toFixed(2)}</label>
+                                  <input
+                                      type="range" min="-1.0" max="1.0" step="0.05"
+                                      value={highlights}
+                                      onChange={(e) => setHighlights(parseFloat(e.target.value))}
+                                      className="w-full"
+                                  />
+                              </div>
+                              <div>
+                                  <label className="block text-xs text-gray-500">Shadows: {shadows.toFixed(2)}</label>
+                                  <input
+                                      type="range" min="-1.0" max="1.0" step="0.05"
+                                      value={shadows}
+                                      onChange={(e) => setShadows(parseFloat(e.target.value))}
+                                      className="w-full"
+                                  />
+                              </div>
+                              <div>
+                                  <label className="block text-xs text-gray-500">Whites: {whites.toFixed(2)}</label>
+                                  <input
+                                      type="range" min="-1.0" max="1.0" step="0.05"
+                                      value={whites}
+                                      onChange={(e) => setWhites(parseFloat(e.target.value))}
+                                      className="w-full"
+                                  />
+                              </div>
+                              <div>
+                                  <label className="block text-xs text-gray-500">Blacks: {blacks.toFixed(2)}</label>
+                                  <input
+                                      type="range" min="-1.0" max="1.0" step="0.05"
+                                      value={blacks}
+                                      onChange={(e) => setBlacks(parseFloat(e.target.value))}
+                                      className="w-full"
+                                  />
+                              </div>
+                          </div>
+
+                          <div>
+                              <label className="block text-xs text-gray-500">Saturation: {saturation.toFixed(2)}</label>
+                              <input
+                                  type="range" min="0.0" max="2.0" step="0.05"
+                                  value={saturation}
+                                  onChange={(e) => setSaturation(parseFloat(e.target.value))}
                                   className="w-full"
                               />
                           </div>
@@ -576,6 +630,10 @@ const RawUploader = () => {
                     exposure={exposure}
                     saturation={saturation}
                     contrast={contrast}
+                    highlights={highlights}
+                    shadows={shadows}
+                    whites={whites}
+                    blacks={blacks}
                     inputGamma={inputGamma}
                     lutData={lutData}
                     lutSize={lutSize}

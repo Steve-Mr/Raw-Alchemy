@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 
-const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, exposure, saturation, contrast, inputGamma, lutData, lutSize }, ref) => {
+const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, exposure, saturation, contrast, highlights, shadows, whites, blacks, inputGamma, lutData, lutSize }, ref) => {
   const canvasRef = useRef(null);
 
   // Persist GL resources across renders
@@ -79,6 +79,12 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
       gl.uniformMatrix3fv(gl.getUniformLocation(program, 'u_cam_to_prophoto'), true, camToProPhotoMatrix || identity);
       gl.uniformMatrix3fv(gl.getUniformLocation(program, 'u_prophoto_to_target'), true, proPhotoToTargetMatrix || identity);
       gl.uniform1i(gl.getUniformLocation(program, 'u_log_curve_type'), logCurveType !== undefined ? logCurveType : 0);
+
+      // Advanced Tone Mapping
+      gl.uniform1f(gl.getUniformLocation(program, 'u_highlights'), highlights !== undefined ? highlights : 0.0);
+      gl.uniform1f(gl.getUniformLocation(program, 'u_shadows'), shadows !== undefined ? shadows : 0.0);
+      gl.uniform1f(gl.getUniformLocation(program, 'u_whites'), whites !== undefined ? whites : 0.0);
+      gl.uniform1f(gl.getUniformLocation(program, 'u_blacks'), blacks !== undefined ? blacks : 0.0);
 
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
@@ -206,6 +212,12 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
       uniform float u_contrast;
       uniform float u_input_gamma;
 
+      // Advanced Tone Mapping
+      uniform float u_highlights;
+      uniform float u_shadows;
+      uniform float u_whites;
+      uniform float u_blacks;
+
       out vec4 outColor;
 
       // Helper for Saturation and Contrast
@@ -218,6 +230,53 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
 
       vec3 applyContrast(vec3 color, float contrast) {
           return (color - 0.18) * contrast + 0.18;
+      }
+
+      // Tone Mapping Helper (Shadows/Highlights)
+      // Uses a standard Luma-based gain approach to simulate recovery
+      vec3 applyShadowsHighlights(vec3 color, float shadows, float highlights) {
+          // ProPhoto Luma Coefficients
+          const vec3 lumaCoef = vec3(0.288040, 0.711874, 0.000086);
+          float luminance = dot(color, lumaCoef);
+
+          // Shadows: Affects darks (0.0 - 0.5)
+          // 1.0 - smoothstep(0.0, 0.5, luma) creates a mask that is 1.0 at black, 0.0 at gray
+          float shadowMask = 1.0 - smoothstep(0.0, 0.5, luminance);
+
+          // Highlights: Affects brights (0.5 - 1.0)
+          // smoothstep(0.5, 1.0, luma) creates a mask that is 0.0 at gray, 1.0 at white
+          float highlightMask = smoothstep(0.5, 1.0, luminance);
+
+          // Apply adjustments
+          // Shadows: Lift (positive) or Crush (negative)
+          // We use a gain factor: (1.0 + strength * mask * scale)
+          // Scale 0.5 keeps it subtle and prevents clipping issues
+          color *= (1.0 + shadows * shadowMask * 0.5);
+
+          // Highlights: Boost (positive) or Recover/Darken (negative)
+          color *= (1.0 + highlights * highlightMask * 0.5);
+
+          return color;
+      }
+
+      // Levels Helper (Whites/Blacks)
+      vec3 applyLevels(vec3 color, float whites, float blacks) {
+          // Blacks: Offset the black point.
+          // Slider -1..1 -> Offset -0.1..0.1 (approx 10% swing)
+          // Negative slider = Higher Black Point (Clipping) -> Subtract
+          // Positive slider = Lower Black Point (Lift) -> Add ?
+          // Standard Lightroom behavior:
+          // Blacks +: Lifts blacks (adds offset).
+          // Blacks -: Crushes blacks (subtracts offset / clips).
+          float blackOffset = blacks * 0.1;
+
+          // Whites: Scale the white point.
+          // Slider -1..1 -> Gain adjustment
+          // Whites +: Increases gain (brighter whites).
+          // Whites -: Decreases gain (dimmer whites).
+          float whiteGain = 1.0 + (whites * 0.5);
+
+          return (color + blackOffset) * whiteGain;
       }
 
       // Apply 3D LUT with Half-Texel Correction
@@ -423,6 +482,13 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
         // 1. Exposure
         prophoto_linear *= pow(2.0, u_exposure);
 
+        // 1.5 Advanced Tone Mapping (Whites/Blacks -> Shadows/Highlights)
+        // Apply Levels first (Global Range)
+        prophoto_linear = applyLevels(prophoto_linear, u_whites, u_blacks);
+
+        // Apply Tone Recovery (Local-ish Range)
+        prophoto_linear = applyShadowsHighlights(prophoto_linear, u_shadows, u_highlights);
+
         // 2. Saturation
         prophoto_linear = applySaturation(prophoto_linear, u_saturation);
 
@@ -597,6 +663,12 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
         gl.uniform1f(gl.getUniformLocation(program, 'u_contrast'), contrast !== undefined ? contrast : 1.0);
         gl.uniform1f(gl.getUniformLocation(program, 'u_input_gamma'), inputGamma !== undefined ? inputGamma : 1.0);
 
+        // Advanced Tone Mapping
+        gl.uniform1f(gl.getUniformLocation(program, 'u_highlights'), highlights !== undefined ? highlights : 0.0);
+        gl.uniform1f(gl.getUniformLocation(program, 'u_shadows'), shadows !== undefined ? shadows : 0.0);
+        gl.uniform1f(gl.getUniformLocation(program, 'u_whites'), whites !== undefined ? whites : 0.0);
+        gl.uniform1f(gl.getUniformLocation(program, 'u_blacks'), blacks !== undefined ? blacks : 0.0);
+
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
     } catch (e) {
@@ -620,7 +692,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
         vaoRef.current = null;
     };
 
-  }, [width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, exposure, saturation, contrast, inputGamma, lutData, lutSize]);
+  }, [width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, exposure, saturation, contrast, highlights, shadows, whites, blacks, inputGamma, lutData, lutSize]);
 
   return <canvas ref={canvasRef} className="max-w-full shadow-lg border border-gray-300" />;
 });
