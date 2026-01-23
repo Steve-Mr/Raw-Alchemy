@@ -1,0 +1,73 @@
+{
+  "appTitle": "Raw Alchemy",
+  "uploadPrompt": "Select RAW File",
+  "loadingDecoding": "Decoding...",
+  "exporting": "Encoding...",
+  "exportingSub": "Please wait.",
+  "error": "Error",
+  "tabs": {
+    "basic": "Basic",
+    "tone": "Grading",
+    "color": "Color",
+    "export": "Export",
+    "advanced": "Advanced"
+  },
+  "basic": {
+    "wb": "White Balance",
+    "red": "Red",
+    "green": "Green",
+    "blue": "Blue",
+    "exposure": "Exposure",
+    "contrast": "Contrast",
+    "saturation": "Saturation",
+    "metering": "Metering",
+    "meteringModes": {
+      "hybrid": "Hybrid",
+      "matrix": "Matrix",
+      "center-weighted": "Center",
+      "highlight-safe": "Safe",
+      "average": "Average"
+    }
+  },
+  "tone": {
+    "highlights": "Highlights",
+    "shadows": "Shadows",
+    "whites": "Whites",
+    "blacks": "Blacks"
+  },
+  "color": {
+    "targetSpace": "Output Log Space",
+    "lut": "3D LUT",
+    "loadLut": "Load .cube",
+    "noLut": "None",
+    "lutApplied": "Active",
+    "lutNote": "Applied post-log."
+  },
+  "export": {
+    "format": "Format",
+    "button": "Save Image",
+    "encoding": "Processing..."
+  },
+  "advanced": {
+    "title": "Advanced",
+    "inputLinearization": "Input Gamma",
+    "inputLinearizationNote": "Adjust if image appears washed out (1.0 - 2.2).",
+    "imageVerification": "Stats",
+    "analyze": "Analyze",
+    "statsNote": "Values match Log floor.",
+    "min": "Min",
+    "max": "Max",
+    "mean": "Avg"
+  },
+  "fileInfo": {
+    "dimensions": "Dim",
+    "channels": "Ch",
+    "bitDepth": "Bit",
+    "bufferSize": "Size"
+  },
+  "actions": {
+    "remove": "Remove Image",
+    "replace": "Replace",
+    "reset": "Reset"
+  }
+}

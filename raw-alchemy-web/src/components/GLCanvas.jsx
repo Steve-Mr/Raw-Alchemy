@@ -694,7 +694,9 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
 
   }, [width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, exposure, saturation, contrast, highlights, shadows, whites, blacks, inputGamma, lutData, lutSize]);
 
-  return <canvas ref={canvasRef} className="max-w-full shadow-lg border border-gray-300" />;
+  // Use max-h-full to ensure vertical images don't overflow the container
+  // Remove border/shadow here as the parent container handles the frame
+  return <canvas ref={canvasRef} className="max-w-full max-h-full object-contain" />;
 });
 
 export default GLCanvas;

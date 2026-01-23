@@ -1,0 +1,73 @@
+{
+  "appTitle": "Raw Alchemy",
+  "uploadPrompt": "选择 RAW 文件",
+  "loadingDecoding": "解码中...",
+  "exporting": "编码中...",
+  "exportingSub": "请稍候。",
+  "error": "错误",
+  "tabs": {
+    "basic": "基础",
+    "tone": "调色",
+    "color": "色彩",
+    "export": "导出",
+    "advanced": "高级"
+  },
+  "basic": {
+    "wb": "白平衡",
+    "red": "红色",
+    "green": "绿色",
+    "blue": "蓝色",
+    "exposure": "曝光",
+    "contrast": "对比度",
+    "saturation": "饱和度",
+    "metering": "测光",
+    "meteringModes": {
+      "hybrid": "混合",
+      "matrix": "矩阵",
+      "center-weighted": "中央",
+      "highlight-safe": "保护",
+      "average": "平均"
+    }
+  },
+  "tone": {
+    "highlights": "高光",
+    "shadows": "阴影",
+    "whites": "白色",
+    "blacks": "黑色"
+  },
+  "color": {
+    "targetSpace": "输出空间",
+    "lut": "3D LUT",
+    "loadLut": "加载 .cube",
+    "noLut": "无",
+    "lutApplied": "已应用",
+    "lutNote": "Log 后应用。"
+  },
+  "export": {
+    "format": "格式",
+    "button": "保存图片",
+    "encoding": "处理中..."
+  },
+  "advanced": {
+    "title": "高级",
+    "inputLinearization": "输入 Gamma",
+    "inputLinearizationNote": "如果画面发灰可调整 (1.0 - 2.2)。",
+    "imageVerification": "统计",
+    "analyze": "分析",
+    "statsNote": "数值对应 Log 底。",
+    "min": "最小",
+    "max": "最大",
+    "mean": "平均"
+  },
+  "fileInfo": {
+    "dimensions": "尺寸",
+    "channels": "通道",
+    "bitDepth": "位深",
+    "bufferSize": "大小"
+  },
+  "actions": {
+    "remove": "移除图片",
+    "replace": "替换",
+    "reset": "重置"
+  }
+}

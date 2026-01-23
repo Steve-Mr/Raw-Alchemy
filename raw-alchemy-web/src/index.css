@@ -1,3 +1,66 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-surface-light: #ffffff; /* Pure white for clean modern look */
+  --color-surface-dark: #09090b; /* Zinc-950 for deep dark mode */
+
+  --color-surface-container-light: #f4f4f5; /* Zinc-100 */
+  --color-surface-container-dark: #18181b; /* Zinc-900 */
+
+  --color-primary-light: #2563eb;
+  --color-primary-dark: #3b82f6;
+
+  --color-border-light: #e4e4e7; /* Zinc-200 */
+  --color-border-dark: #27272a; /* Zinc-800 */
+}
+
+/* Base resets for typography */
+body {
+  @apply font-sans antialiased bg-surface-light dark:bg-surface-dark text-gray-900 dark:text-gray-100;
+}
+
+/* Custom Scrollbar for Webkit */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px; /* Thinner */
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 dark:bg-gray-700 rounded-full;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400 dark:bg-gray-600;
+}
+
+/* Slider Track Styling for Cross-Browser Visibility */
+input[type=range] {
+  @apply appearance-none bg-transparent cursor-pointer;
+}
+
+/* Webkit (Chrome, Safari) */
+input[type=range]::-webkit-slider-runnable-track {
+  @apply h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700;
+}
+
+input[type=range]::-webkit-slider-thumb {
+  @apply appearance-none h-4 w-4 rounded-full bg-primary-light dark:bg-primary-dark -mt-1.5 shadow-sm border-2 border-white dark:border-gray-900 transition-transform;
+}
+
+input[type=range]:active::-webkit-slider-thumb {
+    transform: scale(1.2);
+}
+
+/* Firefox */
+input[type=range]::-moz-range-track {
+  @apply h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700;
+}
+
+input[type=range]::-moz-range-thumb {
+  @apply h-4 w-4 rounded-full bg-primary-light dark:bg-primary-dark border-none shadow-sm;
+}

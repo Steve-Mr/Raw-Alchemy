@@ -1,14 +1,24 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import GLCanvas from './GLCanvas';
 import { getProPhotoToTargetMatrix, formatMatrixForUniform, LOG_SPACE_CONFIG } from '../utils/colorMath';
 import { calculateAutoExposure } from '../utils/metering';
 import { parseCubeLUT } from '../utils/lutParser';
 
+// Layout & Controls
+import ResponsiveLayout from './layout/ResponsiveLayout';
+import BasicControls from './controls/BasicControls';
+import ToneControls from './controls/ToneControls';
+import ColorControls from './controls/ColorControls';
+import ExportControls from './controls/ExportControls';
+import AdvancedControls from './controls/AdvancedControls';
+import { UploadCloud, XCircle, RefreshCw } from 'lucide-react';
+
 const RawUploader = () => {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [imageState, setImageState] = useState(null); // { data, width, height, channels, bitDepth, mode }
-  const [mode, setMode] = useState('rgb'); // 'rgb' or 'bayer'
+  const [imageState, setImageState] = useState(null);
   const [metadata, setMetadata] = useState(null);
 
   // LUT State
@@ -19,22 +29,21 @@ const RawUploader = () => {
   // Pipeline State
   const [wbRed, setWbRed] = useState(1.0);
   const [wbBlue, setWbBlue] = useState(1.0);
-  const [wbGreen, setWbGreen] = useState(1.0); // Usually kept at 1.0 or derived
+  const [wbGreen, setWbGreen] = useState(1.0);
 
   // Basic Adjustments State
   const [exposure, setExposure] = useState(0.0);
-  // Default Saturation (1.25) and Contrast (1.1) match the Python 'Camera-Match Boost' logic
   const [saturation, setSaturation] = useState(1.25);
   const [contrast, setContrast] = useState(1.1);
 
-  // Advanced Tone Mapping (Defaults to 0.0 - Neutral)
+  // Advanced Tone Mapping
   const [highlights, setHighlights] = useState(0.0);
   const [shadows, setShadows] = useState(0.0);
   const [whites, setWhites] = useState(0.0);
   const [blacks, setBlacks] = useState(0.0);
 
   const [meteringMode, setMeteringMode] = useState('hybrid');
-  const [inputGamma, setInputGamma] = useState(1.0); // 1.0 = Linear (default)
+  const [inputGamma, setInputGamma] = useState(1.0);
 
   const [camToProPhotoMat, setCamToProPhotoMat] = useState(null);
   const [proPhotoToTargetMat, setProPhotoToTargetMat] = useState(null);
@@ -48,7 +57,9 @@ const RawUploader = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [imgStats, setImgStats] = useState(null);
 
-  // Terminate workers on component unmount
+  // Ref for the hidden file input to trigger it programmatically
+  const fileInputRef = useRef(null);
+
   useEffect(() => {
     return () => {
       workerRef.current?.terminate();
@@ -56,39 +67,17 @@ const RawUploader = () => {
     };
   }, []);
 
-  // Update matrices when metadata or target log space changes
   useEffect(() => {
       if (metadata) {
-          // 1. Initialize WB Sliders from Metadata (As Shot)
-          // Only if sliders haven't been moved manually?
-          // For now, let's keep it reactive to metadata load only (not resetting on every render)
-          // We can't distinguish "initial load" easily without more state, but this effect runs on metadata change.
-          // We should be careful not to overwrite user changes if metadata doesn't change.
-          // Ideally, we set WB only when metadata *first* arrives.
-      }
-  }, [metadata]);
-
-  // Effect to recalculate matrices whenever metadata OR targetLogSpace changes
-  useEffect(() => {
-      if (metadata) {
-          // 1. Calculate Cam -> ProPhoto
-          // The Worker is now configured to output ProPhoto RGB (outputColor: 4).
-          // So the "Camera to ProPhoto" step in the shader should be an Identity Matrix.
           const c2p = [1,0,0, 0,1,0, 0,0,1];
           setCamToProPhotoMat(formatMatrixForUniform(c2p));
-
-          // 2. Calculate ProPhoto -> Target Log Gamut
           const p2t = getProPhotoToTargetMatrix(targetLogSpace);
           setProPhotoToTargetMat(formatMatrixForUniform(p2t));
       }
   }, [metadata, targetLogSpace]);
 
-  // Effect: Calculate Auto-Exposure whenever Image Loaded or Mode Changed
   useEffect(() => {
       if (imageState && imageState.mode === 'rgb' && imageState.data) {
-          console.log(`Metering: Calculating ${meteringMode}...`);
-          // Use setTimeout to allow UI to render spinner if needed (though calc is fast)
-          // Since it's fast (subsampled), we run sync to avoid flicker
           const ev = calculateAutoExposure(
               imageState.data,
               imageState.width,
@@ -96,19 +85,17 @@ const RawUploader = () => {
               meteringMode,
               imageState.bitDepth
           );
-          console.log(`Metering: ${ev.toFixed(2)} EV`);
           setExposure(ev);
       }
   }, [imageState, meteringMode]);
 
-
-  const handleProcess = async (fileToProcess, selectedMode) => {
+  const handleProcess = async (fileToProcess) => {
     if (!fileToProcess) return;
 
     setLoading(true);
     setError(null);
     setImageState(null);
-    setMetadata(null); // Reset metadata
+    setMetadata(null);
 
     if (workerRef.current) {
         workerRef.current.terminate();
@@ -121,14 +108,10 @@ const RawUploader = () => {
       const { type, data, width, height, channels, bitDepth, error: workerError, mode: resultMode, meta } = e.data;
 
       if (type === 'success') {
-        setMetadata(meta); // Save metadata for pipeline
-
-        // Reset WB Sliders to Neutral (since Worker applied As-Shot WB)
+        setMetadata(meta);
         setWbRed(1.0);
         setWbGreen(1.0);
         setWbBlue(1.0);
-
-        // Reset Tone Controls
         setHighlights(0.0);
         setShadows(0.0);
         setWhites(0.0);
@@ -157,11 +140,10 @@ const RawUploader = () => {
 
     try {
       const buffer = await fileToProcess.arrayBuffer();
-
       workerRef.current.postMessage({
         command: 'decode',
         fileBuffer: buffer,
-        mode: selectedMode,
+        mode: 'rgb',
         id: Date.now()
       }, [buffer]);
 
@@ -173,21 +155,14 @@ const RawUploader = () => {
 
   const handleExport = () => {
       if (!imageState || !glCanvasRef.current) return;
-
       setExporting(true);
-
-      // Allow UI to update (show spinner) before freezing main thread for readPixels
       setTimeout(async () => {
           try {
-              // 1. Capture High Res Float Data from WebGL
               const result = glCanvasRef.current.captureHighRes();
-              if (!result) {
-                  throw new Error("Failed to capture WebGL data");
-              }
+              if (!result) throw new Error("Failed to capture WebGL data");
 
               const { width, height, data } = result;
 
-              // 2. Initialize Export Worker
               if (exportWorkerRef.current) {
                   exportWorkerRef.current.terminate();
               }
@@ -196,13 +171,11 @@ const RawUploader = () => {
               exportWorkerRef.current.onmessage = (e) => {
                   const { type, buffer, message } = e.data;
                   if (type === 'success') {
-                      // 3. Trigger Download
                       const mimeType = exportFormat === 'tiff' ? 'image/tiff' : `image/${exportFormat}`;
                       const blob = new Blob([buffer], { type: mimeType });
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement('a');
                       a.href = url;
-                      // Construct filename: OriginalName_LogSpace.ext
                       const originalName = selectedFile ? selectedFile.name.split('.').slice(0, -1).join('.') : 'output';
                       const cleanLogName = targetLogSpace.replace(/\s+/g, '-');
                       const ext = exportFormat === 'tiff' ? 'tiff' : exportFormat === 'jpeg' ? 'jpg' : exportFormat;
@@ -211,7 +184,6 @@ const RawUploader = () => {
                       a.click();
                       document.body.removeChild(a);
                       URL.revokeObjectURL(url);
-
                       setExporting(false);
                   } else {
                       setError("Export failed: " + message);
@@ -225,16 +197,12 @@ const RawUploader = () => {
                   setExporting(false);
               };
 
-              // 3. Send to Worker (Transferable)
-              // We pass the raw RGBA Float32Array directly to the worker to avoid main thread freeze.
-              // We rely on Transferable objects for zero-copy.
-
               exportWorkerRef.current.postMessage({
                   width,
                   height,
-                  data: data, // RGBA Float32Array
+                  data: data,
                   channels: 4,
-                  logSpace: targetLogSpace, // Pass the log space name to the worker
+                  logSpace: targetLogSpace,
                   format: exportFormat,
                   quality: 0.95
               }, [data.buffer]);
@@ -250,16 +218,25 @@ const RawUploader = () => {
   const handleFileSelect = (e) => {
     if (e.target.files[0]) {
       setSelectedFile(e.target.files[0]);
-      handleProcess(e.target.files[0], mode);
+      handleProcess(e.target.files[0]);
     }
   };
 
-  const handleModeToggle = (newMode) => {
-    if (newMode === mode) return;
-    setMode(newMode);
-    if (selectedFile) {
-      handleProcess(selectedFile, newMode);
-    }
+  const handleRemoveImage = () => {
+      setImageState(null);
+      setSelectedFile(null);
+      setMetadata(null);
+      // Reset critical pipeline state
+      setLutData(null);
+      setLutName(null);
+      // Reset file input value so same file can be selected again
+      if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleTriggerUpload = () => {
+      if (fileInputRef.current) {
+          fileInputRef.current.click();
+      }
   };
 
   const handleLutSelect = (e) => {
@@ -274,14 +251,12 @@ const RawUploader = () => {
               setLutData(data);
               setLutSize(size);
               setLutName(title === 'Untitled LUT' ? file.name : title);
-              console.log(`LUT Loaded: ${file.name} (Size: ${size}^3, Points: ${data.length / 3})`);
           } catch (err) {
               console.error("LUT Parse Error:", err);
               setError("Failed to load LUT: " + err.message);
           }
       };
       reader.readAsText(file);
-      // Reset input value so same file can be selected again
       e.target.value = '';
   };
 
@@ -298,344 +273,131 @@ const RawUploader = () => {
       }
   };
 
-  return (
-    <div className="p-4 border rounded shadow bg-white max-w-4xl mx-auto mt-4">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold">RAW Processing Engine</h2>
-        <div className="flex space-x-2">
-            <button
-                onClick={() => handleModeToggle('rgb')}
-                className={`px-3 py-1 rounded text-sm font-semibold ${mode === 'rgb' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-            >
-                Linear RGB (16-bit)
-            </button>
-            <button
-                onClick={() => handleModeToggle('bayer')}
-                className={`px-3 py-1 rounded text-sm font-semibold ${mode === 'bayer' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-            >
-                Raw Bayer (Unpacked)
-            </button>
-        </div>
-      </div>
+  // Reset Functions
+  const resetWB = () => {
+      setWbRed(1.0);
+      setWbGreen(1.0);
+      setWbBlue(1.0);
+  };
 
-      <input
+  const resetExposureSettings = () => {
+      setExposure(0.0);
+      setMeteringMode('hybrid');
+  };
+
+  const resetEnhancements = () => {
+      setContrast(1.1);
+      setSaturation(1.25);
+  };
+
+  const resetTone = () => {
+      setHighlights(0.0);
+      setShadows(0.0);
+      setWhites(0.0);
+      setBlacks(0.0);
+  };
+
+  const resetAdvanced = () => {
+      setInputGamma(1.0);
+      setImgStats(null);
+  };
+
+  // Styled File Input Component
+  const FileInput = (
+    <div className="flex flex-col items-center w-full">
+        <label
+            onClick={handleTriggerUpload}
+            className="flex flex-col items-center justify-center w-full h-40 px-4 transition-all bg-white dark:bg-gray-900 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-3xl cursor-pointer hover:border-primary-light dark:hover:border-primary-dark hover:bg-gray-50 dark:hover:bg-gray-800/80 group"
+        >
+            <div className="flex flex-col items-center space-y-4">
+                <div className="p-4 rounded-full bg-gray-100 dark:bg-gray-800 group-hover:scale-110 transition-transform">
+                    <UploadCloud className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+                </div>
+                <div className="text-center">
+                    <span className="font-semibold text-gray-700 dark:text-gray-200 block mb-1">
+                        {t('uploadPrompt')}
+                    </span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                        RAW (.ARW, .CR2, .DNG...)
+                    </span>
+                </div>
+            </div>
+        </label>
+    </div>
+  );
+
+  return (
+    <>
+    {/* Hidden Input - Always rendered to preserve ref */}
+    <input
+        ref={fileInputRef}
+        id="raw-upload-input"
         type="file"
+        name="file_upload"
+        className="hidden"
         accept=".ARW,.CR2,.CR3,.DNG,.NEF,.ORF,.RAF"
         onChange={handleFileSelect}
-        className="block w-full text-sm text-gray-500
-          file:mr-4 file:py-2 file:px-4
-          file:rounded-full file:border-0
-          file:text-sm file:font-semibold
-          file:bg-blue-50 file:text-blue-700
-          hover:file:bg-blue-100
-          mb-4
-        "
-      />
+    />
+    <ResponsiveLayout
+        fileInput={FileInput}
+        loading={loading}
+        error={error}
+        exporting={exporting}
+        controls={{
+            basic: <BasicControls
+                wbRed={wbRed} setWbRed={setWbRed}
+                wbGreen={wbGreen} setWbGreen={setWbGreen}
+                wbBlue={wbBlue} setWbBlue={setWbBlue}
+                exposure={exposure} setExposure={setExposure}
+                contrast={contrast} setContrast={setContrast}
+                saturation={saturation} setSaturation={setSaturation}
+                meteringMode={meteringMode} setMeteringMode={setMeteringMode}
+                onResetWB={resetWB}
+                onResetExposure={resetExposureSettings}
+                onResetEnhancements={resetEnhancements}
+            />,
+            tone: <ToneControls
+                highlights={highlights} setHighlights={setHighlights}
+                shadows={shadows} setShadows={setShadows}
+                whites={whites} setWhites={setWhites}
+                blacks={blacks} setBlacks={setBlacks}
+                onReset={resetTone}
+            />,
+            color: <ColorControls
+                targetLogSpace={targetLogSpace} setTargetLogSpace={setTargetLogSpace}
+                lutName={lutName} onLutSelect={handleLutSelect} onRemoveLut={handleRemoveLut}
+            />,
+            export: <ExportControls
+                exportFormat={exportFormat} setExportFormat={setExportFormat}
+                handleExport={handleExport} exporting={exporting}
+            />,
+            advanced: <AdvancedControls
+                inputGamma={inputGamma} setInputGamma={setInputGamma}
+                handleAnalyze={handleAnalyze} imgStats={imgStats}
+                onReset={resetAdvanced}
+            />
+        }}
+    >
+        {imageState && (
+            <div className="relative w-full h-full flex items-center justify-center">
+                {/* Floating Action Buttons Overlay - Moved to bottom right to avoid header overlap */}
+                <div className="absolute bottom-6 right-6 z-50 flex gap-3">
+                    <button
+                        onClick={handleTriggerUpload}
+                        className="p-3 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black/70 text-gray-700 dark:text-white rounded-full backdrop-blur-md transition-all shadow-xl border border-gray-200 dark:border-white/10 hover:scale-105 active:scale-95"
+                        title={t('actions.replace')}
+                    >
+                        <RefreshCw size={20} />
+                    </button>
+                    <button
+                        onClick={handleRemoveImage}
+                        className="p-3 bg-red-100 dark:bg-red-900/50 hover:bg-red-200 dark:hover:bg-red-900/70 text-red-600 dark:text-red-400 rounded-full backdrop-blur-md transition-all shadow-xl border border-red-200 dark:border-red-800/30 hover:scale-105 active:scale-95"
+                        title={t('actions.remove')}
+                    >
+                        <XCircle size={20} />
+                    </button>
+                </div>
 
-      {/* --- COLOR PIPELINE CONTROLS --- */}
-      {imageState && mode === 'rgb' && (
-          <div className="mb-6 p-4 bg-gray-50 rounded border border-gray-200">
-              <h3 className="text-md font-bold text-gray-700 mb-3">Color Pipeline Controls</h3>
-
-              <div className="grid grid-cols-2 gap-6">
-                  {/* WB Controls */}
-                  <div>
-                      <h4 className="text-sm font-semibold text-gray-600 mb-2">White Balance (Fine Tune)</h4>
-                      <div className="space-y-2 mb-4">
-                          <div>
-                              <label className="block text-xs text-gray-500">Red Gain: {wbRed.toFixed(3)}</label>
-                              <input
-                                  type="range" min="0.1" max="5.0" step="0.01"
-                                  value={wbRed}
-                                  onChange={(e) => setWbRed(parseFloat(e.target.value))}
-                                  className="w-full"
-                              />
-                          </div>
-                          <div>
-                              <label className="block text-xs text-gray-500">Green Gain: {wbGreen.toFixed(3)}</label>
-                              <input
-                                  type="range" min="0.1" max="5.0" step="0.01"
-                                  value={wbGreen}
-                                  onChange={(e) => setWbGreen(parseFloat(e.target.value))}
-                                  className="w-full"
-                              />
-                          </div>
-                          <div>
-                              <label className="block text-xs text-gray-500">Blue Gain: {wbBlue.toFixed(3)}</label>
-                              <input
-                                  type="range" min="0.1" max="5.0" step="0.01"
-                                  value={wbBlue}
-                                  onChange={(e) => setWbBlue(parseFloat(e.target.value))}
-                                  className="w-full"
-                              />
-                          </div>
-                      </div>
-
-                      <div className="flex justify-between items-center mb-2">
-                          <h4 className="text-sm font-semibold text-gray-600">Basic Adjustments</h4>
-                          <select
-                              value={meteringMode}
-                              onChange={(e) => setMeteringMode(e.target.value)}
-                              className="text-xs border border-gray-300 rounded p-1"
-                              title="Metering Mode"
-                          >
-                              <option value="hybrid">Hybrid (Default)</option>
-                              <option value="matrix">Matrix</option>
-                              <option value="center-weighted">Center Weighted</option>
-                              <option value="highlight-safe">Highlight Safe</option>
-                              <option value="average">Average</option>
-                          </select>
-                      </div>
-
-                      <div className="space-y-2">
-                          <div>
-                              <label className="block text-xs text-gray-500">Exposure (EV): {exposure.toFixed(2)}</label>
-                              <input
-                                  type="range" min="-5.0" max="5.0" step="0.1"
-                                  value={exposure}
-                                  onChange={(e) => setExposure(parseFloat(e.target.value))}
-                                  className="w-full"
-                              />
-                          </div>
-                          <div>
-                              <label className="block text-xs text-gray-500">Contrast: {contrast.toFixed(2)}</label>
-                              <input
-                                  type="range" min="0.5" max="1.5" step="0.05"
-                                  value={contrast}
-                                  onChange={(e) => setContrast(parseFloat(e.target.value))}
-                                  className="w-full"
-                              />
-                          </div>
-
-                          {/* Tone Mapping Controls */}
-                          <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                  <label className="block text-xs text-gray-500">Highlights: {highlights.toFixed(2)}</label>
-                                  <input
-                                      type="range" min="-1.0" max="1.0" step="0.05"
-                                      value={highlights}
-                                      onChange={(e) => setHighlights(parseFloat(e.target.value))}
-                                      className="w-full"
-                                  />
-                              </div>
-                              <div>
-                                  <label className="block text-xs text-gray-500">Shadows: {shadows.toFixed(2)}</label>
-                                  <input
-                                      type="range" min="-1.0" max="1.0" step="0.05"
-                                      value={shadows}
-                                      onChange={(e) => setShadows(parseFloat(e.target.value))}
-                                      className="w-full"
-                                  />
-                              </div>
-                              <div>
-                                  <label className="block text-xs text-gray-500">Whites: {whites.toFixed(2)}</label>
-                                  <input
-                                      type="range" min="-1.0" max="1.0" step="0.05"
-                                      value={whites}
-                                      onChange={(e) => setWhites(parseFloat(e.target.value))}
-                                      className="w-full"
-                                  />
-                              </div>
-                              <div>
-                                  <label className="block text-xs text-gray-500">Blacks: {blacks.toFixed(2)}</label>
-                                  <input
-                                      type="range" min="-1.0" max="1.0" step="0.05"
-                                      value={blacks}
-                                      onChange={(e) => setBlacks(parseFloat(e.target.value))}
-                                      className="w-full"
-                                  />
-                              </div>
-                          </div>
-
-                          <div>
-                              <label className="block text-xs text-gray-500">Saturation: {saturation.toFixed(2)}</label>
-                              <input
-                                  type="range" min="0.0" max="2.0" step="0.05"
-                                  value={saturation}
-                                  onChange={(e) => setSaturation(parseFloat(e.target.value))}
-                                  className="w-full"
-                              />
-                          </div>
-                          <div className="pt-2 border-t mt-2">
-                               <label className="block text-xs text-blue-600 font-bold" title="Use 2.2 if image looks washed out">
-                                   Input Linearization (Gamma: {inputGamma.toFixed(1)})
-                               </label>
-                               <input
-                                   type="range" min="1.0" max="3.0" step="0.1"
-                                   value={inputGamma}
-                                   onChange={(e) => setInputGamma(parseFloat(e.target.value))}
-                                   className="w-full"
-                               />
-                               <p className="text-[10px] text-gray-400">
-                                   * If image is washed out, try setting to 2.2 or 1.8 to correct for missing linear decoding.
-                               </p>
-                          </div>
-                      </div>
-                  </div>
-
-                  {/* Target Space Controls */}
-                  <div>
-                      <h4 className="text-sm font-semibold text-gray-600 mb-2">Target Log Space</h4>
-                      <div className="mb-4">
-                          <label className="block text-xs text-gray-500 mb-1">Select Output Format:</label>
-                          <select
-                              className="block w-full p-2 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                              value={targetLogSpace}
-                              onChange={(e) => setTargetLogSpace(e.target.value)}
-                          >
-                              {Object.keys(LOG_SPACE_CONFIG).map((spaceName) => (
-                                  <option key={spaceName} value={spaceName}>
-                                      {spaceName}
-                                  </option>
-                              ))}
-                          </select>
-                      </div>
-
-                      {/* File Format Selector */}
-                      <div className="mb-4">
-                          <label className="block text-xs text-gray-500 mb-1">File Format:</label>
-                          <select
-                              className="block w-full p-2 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                              value={exportFormat}
-                              onChange={(e) => setExportFormat(e.target.value)}
-                          >
-                              <option value="tiff">TIFF (16-bit)</option>
-                              <option value="jpeg">JPEG (8-bit)</option>
-                              <option value="png">PNG (8-bit)</option>
-                              <option value="webp">WebP (8-bit)</option>
-                          </select>
-                      </div>
-
-                      {/* Export Button */}
-                      <button
-                          onClick={handleExport}
-                          disabled={exporting}
-                          className={`w-full py-2 px-4 rounded font-bold text-white transition-colors
-                              ${exporting ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 shadow-md'}
-                          `}
-                      >
-                          {exporting ? 'Encoding...' : 'Export Image'}
-                      </button>
-
-                      {/* LUT Controls */}
-                      <div className="mt-6 border-t pt-4">
-                          <h4 className="text-sm font-semibold text-gray-600 mb-2">3D LUT (.cube)</h4>
-                          <div className="mb-2">
-                              {lutName ? (
-                                  <div className="flex items-center justify-between bg-blue-50 p-2 rounded border border-blue-200">
-                                      <div className="truncate text-xs font-medium text-blue-800 pr-2" title={lutName}>
-                                          {lutName}
-                                      </div>
-                                      <button
-                                          onClick={handleRemoveLut}
-                                          className="text-red-500 hover:text-red-700 text-xs font-bold px-1"
-                                      >
-                                          ✕
-                                      </button>
-                                  </div>
-                              ) : (
-                                  <input
-                                      type="file"
-                                      accept=".cube"
-                                      onChange={handleLutSelect}
-                                      className="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
-                                  />
-                              )}
-                          </div>
-                          <p className="text-[10px] text-gray-400">
-                             Applied after Log encoding. Standard Adobe .cube supported.
-                          </p>
-                      </div>
-
-                      {/* Export Button */}
-                      <div className="mt-6">
-                          <button
-                              onClick={handleExport}
-                              disabled={exporting}
-                              className={`w-full py-2 px-4 rounded font-bold text-white transition-colors
-                                  ${exporting ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 shadow-md'}
-                              `}
-                          >
-                              {exporting ? 'Encoding...' : 'Export Image'}
-                          </button>
-                      </div>
-
-                      {/* Metadata Debug */}
-                      <div className="text-xs font-mono text-gray-500 overflow-auto h-20 bg-gray-100 p-2 rounded mt-4">
-                          <strong>Metadata Extraction:</strong>
-                          <pre>{metadata ? JSON.stringify({
-                              cam_mul: metadata.cam_mul,
-                              rgb_cam: metadata.rgb_cam ? 'Found (Length: ' + metadata.rgb_cam.length + ')' : 'Not Found',
-                              cam_xyz: metadata.cam_xyz ? 'Found' : 'Not Found',
-                              black: metadata.black,
-                              white: metadata.maximum
-                          }, null, 2) : 'No Metadata'}</pre>
-                      </div>
-
-                      {/* Image Analysis Tool */}
-                      <div className="mt-4 border-t pt-4">
-                          <h4 className="text-sm font-semibold text-gray-600 mb-2">Image Verification</h4>
-                          <button
-                              onClick={handleAnalyze}
-                              className="w-full py-1 px-3 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold rounded"
-                          >
-                              Analyze Image Stats
-                          </button>
-                          {imgStats && (
-                              <div className="mt-2 text-[10px] font-mono bg-gray-100 p-2 rounded">
-                                  <div>Min (Black): {imgStats.min.toFixed(5)}</div>
-                                  <div>Max (White): {imgStats.max.toFixed(5)}</div>
-                                  <div>Mean (Avg):  {imgStats.mean.toFixed(5)}</div>
-                                  <div className="text-gray-400 mt-1">
-                                      * Note: Log curves lift blacks (e.g., F-Log2 starts at ~0.0928).
-                                      <br/>
-                                      * A result matching the Log floor confirms correct Linear Input (0.0).
-                                  </div>
-                              </div>
-                          )}
-                      </div>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {loading && (
-        <div className="flex items-center space-x-2 text-blue-600 mb-4">
-            <svg className="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <span>Decoding RAW data in Web Worker...</span>
-        </div>
-      )}
-
-      {/* Exporting Overlay Spinner */}
-      {exporting && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white p-6 rounded shadow-xl flex flex-col items-center">
-                 <svg className="animate-spin h-8 w-8 text-green-600 mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <span className="text-gray-800 font-semibold">Reading GPU Data & Encoding...</span>
-                <span className="text-xs text-gray-500 mt-1">This may take a moment.</span>
-            </div>
-        </div>
-      )}
-
-      {error && <div className="p-3 bg-red-100 text-red-700 rounded mb-4">Error: {error}</div>}
-
-      {imageState && (
-        <div className="space-y-4">
-            <div className="bg-gray-100 p-2 rounded text-xs font-mono flex flex-wrap gap-4">
-                <span><strong>Dimensions:</strong> {imageState.width} x {imageState.height}</span>
-                <span><strong>Channels:</strong> {imageState.channels}</span>
-                <span><strong>Bit Depth:</strong> {imageState.bitDepth}-bit</span>
-                <span><strong>Mode:</strong> {imageState.mode}</span>
-                <span><strong>Buffer Size:</strong> {(imageState.data.byteLength / 1024 / 1024).toFixed(2)} MB</span>
-            </div>
-
-            <div className="border border-black bg-gray-900 flex justify-center overflow-auto" style={{ maxHeight: '70vh' }}>
                 <GLCanvas
                     ref={glCanvasRef}
                     width={imageState.width}
@@ -659,12 +421,9 @@ const RawUploader = () => {
                     lutSize={lutSize}
                 />
             </div>
-            <p className="text-xs text-gray-500 text-center">
-                * Displaying: {targetLogSpace} | Pipeline: RAW &rarr; WB &rarr; Cam2ProPhoto &rarr; ProPhoto2Target &rarr; {targetLogSpace} Curve {lutData ? '→ 3D LUT' : ''}
-            </p>
-        </div>
-      )}
-    </div>
+        )}
+    </ResponsiveLayout>
+    </>
   );
 };
 
