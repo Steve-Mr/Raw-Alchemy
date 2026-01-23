@@ -273,6 +273,29 @@ const RawUploader = () => {
       }
   };
 
+  // Reset Functions
+  const resetBasic = () => {
+      setWbRed(1.0);
+      setWbGreen(1.0);
+      setWbBlue(1.0);
+      setExposure(0.0);
+      setContrast(1.1);
+      setSaturation(1.25);
+      setMeteringMode('hybrid');
+  };
+
+  const resetTone = () => {
+      setHighlights(0.0);
+      setShadows(0.0);
+      setWhites(0.0);
+      setBlacks(0.0);
+  };
+
+  const resetAdvanced = () => {
+      setInputGamma(1.0);
+      setImgStats(null);
+  };
+
   // Styled File Input Component
   const FileInput = (
     <div className="flex flex-col items-center w-full">
@@ -322,12 +345,14 @@ const RawUploader = () => {
                 contrast={contrast} setContrast={setContrast}
                 saturation={saturation} setSaturation={setSaturation}
                 meteringMode={meteringMode} setMeteringMode={setMeteringMode}
+                onReset={resetBasic}
             />,
             tone: <ToneControls
                 highlights={highlights} setHighlights={setHighlights}
                 shadows={shadows} setShadows={setShadows}
                 whites={whites} setWhites={setWhites}
                 blacks={blacks} setBlacks={setBlacks}
+                onReset={resetTone}
             />,
             color: <ColorControls
                 targetLogSpace={targetLogSpace} setTargetLogSpace={setTargetLogSpace}
@@ -340,6 +365,7 @@ const RawUploader = () => {
             advanced: <AdvancedControls
                 inputGamma={inputGamma} setInputGamma={setInputGamma}
                 handleAnalyze={handleAnalyze} imgStats={imgStats}
+                onReset={resetAdvanced}
             />
         }}
     >

@@ -67,6 +67,7 @@
   },
   "actions": {
     "remove": "移除图片",
-    "replace": "替换"
+    "replace": "替换",
+    "reset": "重置"
   }
 }

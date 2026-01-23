@@ -67,6 +67,7 @@
   },
   "actions": {
     "remove": "Remove Image",
-    "replace": "Replace"
+    "replace": "Replace",
+    "reset": "Reset"
   }
 }

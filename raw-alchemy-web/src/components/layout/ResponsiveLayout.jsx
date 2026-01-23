@@ -132,15 +132,14 @@ const ResponsiveLayout = ({
     <div className="flex h-screen w-screen bg-surface-light dark:bg-surface-dark text-gray-900 dark:text-gray-100 overflow-hidden font-sans">
 
       {/* Left Panel: Image Viewer */}
-      {/* Always use dark background for image viewing to reduce glare and improve perception */}
-      <div className="flex-1 flex flex-col bg-zinc-900 dark:bg-black/95 relative overflow-hidden">
+      <div className="flex-1 flex flex-col bg-gray-100 dark:bg-black/95 relative overflow-hidden transition-colors duration-300">
          <header className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-10 pointer-events-none">
-            <h1 className="text-sm font-bold text-white pointer-events-auto backdrop-blur-md bg-black/50 px-4 py-2 rounded-full border border-white/10 shadow-sm">
+            <h1 className="text-sm font-bold text-gray-900 dark:text-white pointer-events-auto backdrop-blur-md bg-white/50 dark:bg-black/50 px-4 py-2 rounded-full border border-gray-200 dark:border-white/10 shadow-sm transition-colors">
                 {t('appTitle')}
             </h1>
-            <div className="flex items-center gap-3 pointer-events-auto backdrop-blur-md bg-black/50 px-3 py-1.5 rounded-full border border-white/10 shadow-sm text-white">
+            <div className="flex items-center gap-3 pointer-events-auto backdrop-blur-md bg-white/50 dark:bg-black/50 px-3 py-1.5 rounded-full border border-gray-200 dark:border-white/10 shadow-sm text-gray-900 dark:text-white transition-colors">
                 <LanguageToggle />
-                <div className="w-px h-4 bg-white/20"></div>
+                <div className="w-px h-4 bg-gray-300 dark:bg-white/20"></div>
                 <ThemeToggle />
             </div>
          </header>
@@ -164,7 +163,7 @@ const ResponsiveLayout = ({
                     initial={{ opacity: 0, scale: 0.98 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.4 }}
-                    className="relative w-full h-full flex items-center justify-center shadow-2xl rounded-2xl overflow-hidden border border-white/10 bg-black/50 ring-1 ring-white/5"
+                    className="relative w-full h-full flex items-center justify-center shadow-2xl rounded-2xl overflow-hidden border border-transparent"
                  >
                      {children}
                  </motion.div>

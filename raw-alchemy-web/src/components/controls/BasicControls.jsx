@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Sun, Contrast, Droplets, Gauge } from 'lucide-react';
+import { Sun, Contrast, Droplets, Gauge, RotateCcw } from 'lucide-react';
 import PrecisionSlider from './PrecisionSlider';
 
 const ControlItem = ({ label, value, onChange, min, max, step, icon: Icon }) => (
@@ -31,12 +31,24 @@ const BasicControls = ({
   exposure, setExposure,
   contrast, setContrast,
   saturation, setSaturation,
-  meteringMode, setMeteringMode
+  meteringMode, setMeteringMode,
+  onReset
 }) => {
   const { t } = useTranslation();
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+          <button
+              onClick={onReset}
+              className="text-xs flex items-center gap-1.5 text-gray-500 hover:text-primary-light dark:hover:text-primary-dark transition-colors px-2 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
+              title={t('actions.reset')}
+          >
+              <RotateCcw size={14} />
+              {t('actions.reset')}
+          </button>
+      </div>
+
       {/* White Balance */}
       <div className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-800 p-5 rounded-2xl shadow-sm">
         <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">

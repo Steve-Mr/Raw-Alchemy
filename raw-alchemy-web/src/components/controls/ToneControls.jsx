@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { SlidersHorizontal } from 'lucide-react';
+import { SlidersHorizontal, RotateCcw } from 'lucide-react';
 import PrecisionSlider from './PrecisionSlider';
 
 const ToneItem = ({ label, value, onChange, min, max, step }) => (
@@ -25,16 +25,26 @@ const ToneControls = ({
   highlights, setHighlights,
   shadows, setShadows,
   whites, setWhites,
-  blacks, setBlacks
+  blacks, setBlacks,
+  onReset
 }) => {
   const { t } = useTranslation();
 
   return (
     <div className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-800 p-5 rounded-2xl shadow-sm">
-      <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-        <SlidersHorizontal size={14} />
-        {t('tabs.tone')}
-      </h3>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
+          <SlidersHorizontal size={14} />
+          {t('tabs.tone')}
+        </h3>
+        <button
+            onClick={onReset}
+            className="text-gray-400 hover:text-primary-light dark:hover:text-primary-dark transition-colors p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
+            title={t('actions.reset')}
+        >
+            <RotateCcw size={14} />
+        </button>
+      </div>
 
       <div className="space-y-2">
         <ToneItem label={t('tone.highlights')} value={highlights} onChange={setHighlights} min={-1.0} max={1.0} step={0.05} />
