@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { openDB } from 'idb';
 import GLCanvas from './GLCanvas';
 import { getProPhotoToTargetMatrix, formatMatrixForUniform, LOG_SPACE_CONFIG } from '../utils/colorMath';
 import { calculateAutoExposure } from '../utils/metering';
@@ -65,6 +66,43 @@ const RawUploader = () => {
       workerRef.current?.terminate();
       exportWorkerRef.current?.terminate();
     };
+  }, []);
+
+  useEffect(() => {
+    const checkSharedFile = async () => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('shared_target') === 'true') {
+        try {
+          const db = await openDB('nitrate-grain-share', 1);
+          const tx = db.transaction('shared-files', 'readwrite');
+          const store = tx.objectStore('shared-files');
+          const files = await store.getAll();
+
+          if (files && files.length > 0) {
+            // Get the most recent file
+            const sharedItem = files[files.length - 1];
+            const file = sharedItem.file;
+
+            if (file) {
+              setSelectedFile(file);
+              handleProcess(file);
+            }
+
+            // Cleanup
+            await store.clear();
+          }
+
+          // Clean URL without reloading
+          const url = new URL(window.location);
+          url.searchParams.delete('shared_target');
+          window.history.replaceState({}, '', url);
+        } catch (err) {
+          console.error("Error retrieving shared file:", err);
+        }
+      }
+    };
+
+    checkSharedFile();
   }, []);
 
   useEffect(() => {
