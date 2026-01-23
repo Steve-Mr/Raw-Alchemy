@@ -1,0 +1,67 @@
+{
+  "appTitle": "RAW 处理引擎",
+  "uploadPrompt": "选择 RAW 文件",
+  "loadingDecoding": "正在解码 RAW 数据...",
+  "exporting": "读取 GPU 数据并编码...",
+  "exportingSub": "这可能需要一点时间。",
+  "error": "错误",
+  "tabs": {
+    "basic": "基础",
+    "tone": "调色",
+    "color": "色彩",
+    "export": "导出"
+  },
+  "basic": {
+    "wb": "白平衡",
+    "red": "红色增益",
+    "green": "绿色增益",
+    "blue": "蓝色增益",
+    "exposure": "曝光 (EV)",
+    "contrast": "对比度",
+    "saturation": "饱和度",
+    "metering": "测光模式",
+    "meteringModes": {
+      "hybrid": "混合 (默认)",
+      "matrix": "矩阵",
+      "center-weighted": "中央重点",
+      "highlight-safe": "高光优先",
+      "average": "平均"
+    }
+  },
+  "tone": {
+    "highlights": "高光",
+    "shadows": "阴影",
+    "whites": "白色色阶",
+    "blacks": "黑色色阶"
+  },
+  "color": {
+    "targetSpace": "目标 Log 空间",
+    "lut": "3D LUT (.cube)",
+    "loadLut": "加载 .cube LUT",
+    "noLut": "未加载 LUT",
+    "lutApplied": "已应用 LUT",
+    "lutNote": "在 Log 编码后应用。支持标准 Adobe .cube 格式。"
+  },
+  "export": {
+    "format": "文件格式",
+    "button": "导出图片",
+    "encoding": "编码中..."
+  },
+  "advanced": {
+    "title": "高级设置",
+    "inputLinearization": "输入线性化 (Gamma)",
+    "inputLinearizationNote": "如果图像看起来发白，尝试设置为 2.2 或 1.8",
+    "imageVerification": "图像验证",
+    "analyze": "分析图像统计",
+    "statsNote": "注意：Log 曲线会提升黑位。匹配 Log 底部的结果确认了正确的线性输入。",
+    "min": "最小值",
+    "max": "最大值",
+    "mean": "平均值"
+  },
+  "fileInfo": {
+    "dimensions": "尺寸",
+    "channels": "通道",
+    "bitDepth": "位深",
+    "bufferSize": "缓冲大小"
+  }
+}

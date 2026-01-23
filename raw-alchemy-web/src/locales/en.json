@@ -1,0 +1,67 @@
+{
+  "appTitle": "RAW Processing Engine",
+  "uploadPrompt": "Select RAW File",
+  "loadingDecoding": "Decoding RAW data in Web Worker...",
+  "exporting": "Reading GPU Data & Encoding...",
+  "exportingSub": "This may take a moment.",
+  "error": "Error",
+  "tabs": {
+    "basic": "Basic",
+    "tone": "Grading",
+    "color": "Color",
+    "export": "Export"
+  },
+  "basic": {
+    "wb": "White Balance",
+    "red": "Red Gain",
+    "green": "Green Gain",
+    "blue": "Blue Gain",
+    "exposure": "Exposure (EV)",
+    "contrast": "Contrast",
+    "saturation": "Saturation",
+    "metering": "Metering Mode",
+    "meteringModes": {
+      "hybrid": "Hybrid",
+      "matrix": "Matrix",
+      "center-weighted": "Center Weighted",
+      "highlight-safe": "Highlight Safe",
+      "average": "Average"
+    }
+  },
+  "tone": {
+    "highlights": "Highlights",
+    "shadows": "Shadows",
+    "whites": "Whites",
+    "blacks": "Blacks"
+  },
+  "color": {
+    "targetSpace": "Target Log Space",
+    "lut": "3D LUT (.cube)",
+    "loadLut": "Load .cube LUT",
+    "noLut": "No LUT loaded",
+    "lutApplied": "LUT Applied",
+    "lutNote": "Applied after Log encoding. Standard Adobe .cube supported."
+  },
+  "export": {
+    "format": "File Format",
+    "button": "Export Image",
+    "encoding": "Encoding..."
+  },
+  "advanced": {
+    "title": "Advanced Settings",
+    "inputLinearization": "Input Linearization",
+    "inputLinearizationNote": "If image is washed out, try setting to 2.2 or 1.8",
+    "imageVerification": "Image Verification",
+    "analyze": "Analyze Image Stats",
+    "statsNote": "Note: Log curves lift blacks. A result matching the Log floor confirms correct Linear Input.",
+    "min": "Min",
+    "max": "Max",
+    "mean": "Mean"
+  },
+  "fileInfo": {
+    "dimensions": "Dimensions",
+    "channels": "Channels",
+    "bitDepth": "Bit Depth",
+    "bufferSize": "Buffer Size"
+  }
+}
