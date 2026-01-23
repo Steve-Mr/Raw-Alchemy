@@ -39,6 +39,7 @@ const RawUploader = () => {
   const [camToProPhotoMat, setCamToProPhotoMat] = useState(null);
   const [proPhotoToTargetMat, setProPhotoToTargetMat] = useState(null);
   const [targetLogSpace, setTargetLogSpace] = useState('Arri LogC3');
+  const [exportFormat, setExportFormat] = useState('tiff');
 
   const [exporting, setExporting] = useState(false);
   const glCanvasRef = useRef(null);
@@ -196,14 +197,16 @@ const RawUploader = () => {
                   const { type, buffer, message } = e.data;
                   if (type === 'success') {
                       // 3. Trigger Download
-                      const blob = new Blob([buffer], { type: 'image/tiff' });
+                      const mimeType = exportFormat === 'tiff' ? 'image/tiff' : `image/${exportFormat}`;
+                      const blob = new Blob([buffer], { type: mimeType });
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement('a');
                       a.href = url;
-                      // Construct filename: OriginalName_LogSpace.tiff
+                      // Construct filename: OriginalName_LogSpace.ext
                       const originalName = selectedFile ? selectedFile.name.split('.').slice(0, -1).join('.') : 'output';
                       const cleanLogName = targetLogSpace.replace(/\s+/g, '-');
-                      a.download = `${originalName}_${cleanLogName}.tiff`;
+                      const ext = exportFormat === 'tiff' ? 'tiff' : exportFormat === 'jpeg' ? 'jpg' : exportFormat;
+                      a.download = `${originalName}_${cleanLogName}.${ext}`;
                       document.body.appendChild(a);
                       a.click();
                       document.body.removeChild(a);
@@ -231,7 +234,9 @@ const RawUploader = () => {
                   height,
                   data: data, // RGBA Float32Array
                   channels: 4,
-                  logSpace: targetLogSpace // Pass the log space name to the worker
+                  logSpace: targetLogSpace, // Pass the log space name to the worker
+                  format: exportFormat,
+                  quality: 0.95
               }, [data.buffer]);
 
           } catch (err) {
@@ -486,6 +491,21 @@ const RawUploader = () => {
                           </select>
                       </div>
 
+                      {/* File Format Selector */}
+                      <div className="mb-4">
+                          <label className="block text-xs text-gray-500 mb-1">File Format:</label>
+                          <select
+                              className="block w-full p-2 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
+                              value={exportFormat}
+                              onChange={(e) => setExportFormat(e.target.value)}
+                          >
+                              <option value="tiff">TIFF (16-bit)</option>
+                              <option value="jpeg">JPEG (8-bit)</option>
+                              <option value="png">PNG (8-bit)</option>
+                              <option value="webp">WebP (8-bit)</option>
+                          </select>
+                      </div>
+
                       {/* Export Button */}
                       <button
                           onClick={handleExport}
@@ -494,7 +514,7 @@ const RawUploader = () => {
                               ${exporting ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 shadow-md'}
                           `}
                       >
-                          {exporting ? 'Encoding TIFF...' : 'Export 16-bit TIFF'}
+                          {exporting ? 'Encoding...' : 'Export Image'}
                       </button>
 
                       {/* LUT Controls */}
@@ -536,7 +556,7 @@ const RawUploader = () => {
                                   ${exporting ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 shadow-md'}
                               `}
                           >
-                              {exporting ? 'Encoding TIFF...' : 'Export 16-bit TIFF'}
+                              {exporting ? 'Encoding...' : 'Export Image'}
                           </button>
                       </div>
 
