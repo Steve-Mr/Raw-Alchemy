@@ -294,19 +294,20 @@ const RawUploader = () => {
                 </div>
             </div>
         </label>
-        {/* Hidden Input */}
-        <input
-            ref={fileInputRef}
-            type="file"
-            name="file_upload"
-            className="hidden"
-            accept=".ARW,.CR2,.CR3,.DNG,.NEF,.ORF,.RAF"
-            onChange={handleFileSelect}
-        />
     </div>
   );
 
   return (
+    <>
+    {/* Hidden Input - Always rendered to preserve ref */}
+    <input
+        ref={fileInputRef}
+        type="file"
+        name="file_upload"
+        className="hidden"
+        accept=".ARW,.CR2,.CR3,.DNG,.NEF,.ORF,.RAF"
+        onChange={handleFileSelect}
+    />
     <ResponsiveLayout
         fileInput={FileInput}
         loading={loading}
@@ -344,21 +345,21 @@ const RawUploader = () => {
     >
         {imageState && (
             <div className="relative w-full h-full flex items-center justify-center">
-                {/* Floating Action Buttons Overlay */}
-                <div className="absolute top-4 right-4 z-50 flex gap-2">
+                {/* Floating Action Buttons Overlay - Moved to bottom right to avoid header overlap */}
+                <div className="absolute bottom-6 right-6 z-50 flex gap-3">
                     <button
                         onClick={handleTriggerUpload}
-                        className="p-2 bg-black/50 hover:bg-black/70 text-white rounded-full backdrop-blur-md transition-all shadow-lg border border-white/10"
+                        className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur-md transition-all shadow-2xl border border-white/10 hover:scale-105 active:scale-95"
                         title={t('actions.replace')}
                     >
-                        <RefreshCw size={18} />
+                        <RefreshCw size={20} />
                     </button>
                     <button
                         onClick={handleRemoveImage}
-                        className="p-2 bg-red-500/80 hover:bg-red-600 text-white rounded-full backdrop-blur-md transition-all shadow-lg border border-white/10"
+                        className="p-3 bg-red-500/80 hover:bg-red-600 text-white rounded-full backdrop-blur-md transition-all shadow-2xl border border-white/10 hover:scale-105 active:scale-95"
                         title={t('actions.remove')}
                     >
-                        <XCircle size={18} />
+                        <XCircle size={20} />
                     </button>
                 </div>
 
@@ -387,6 +388,7 @@ const RawUploader = () => {
             </div>
         )}
     </ResponsiveLayout>
+    </>
   );
 };
 

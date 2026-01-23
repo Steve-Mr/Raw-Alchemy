@@ -38,8 +38,9 @@ const ResponsiveLayout = ({
 
   if (isMobile) {
     // MOBILE: Bottom Navigation Layout
+    // Use h-[100dvh] to handle mobile browser address bars correctly
     return (
-      <div className="flex flex-col h-screen w-screen overflow-hidden bg-surface-light dark:bg-surface-dark text-gray-900 dark:text-gray-100">
+      <div className="flex flex-col h-[100dvh] w-screen overflow-hidden bg-surface-light dark:bg-surface-dark text-gray-900 dark:text-gray-100">
 
         {/* Top: Image Area (Flexible Height) */}
         <div className="flex-1 relative bg-black/95 flex items-center justify-center overflow-hidden">
@@ -131,19 +132,20 @@ const ResponsiveLayout = ({
     <div className="flex h-screen w-screen bg-surface-light dark:bg-surface-dark text-gray-900 dark:text-gray-100 overflow-hidden font-sans">
 
       {/* Left Panel: Image Viewer */}
-      <div className="flex-1 flex flex-col bg-gray-100 dark:bg-black/95 relative overflow-hidden">
+      {/* Always use dark background for image viewing to reduce glare and improve perception */}
+      <div className="flex-1 flex flex-col bg-zinc-900 dark:bg-black/95 relative overflow-hidden">
          <header className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-10 pointer-events-none">
-            <h1 className="text-sm font-bold text-gray-900 dark:text-white pointer-events-auto backdrop-blur-md bg-white/50 dark:bg-black/50 px-4 py-2 rounded-full border border-white/20 shadow-sm">
+            <h1 className="text-sm font-bold text-white pointer-events-auto backdrop-blur-md bg-black/50 px-4 py-2 rounded-full border border-white/10 shadow-sm">
                 {t('appTitle')}
             </h1>
-            <div className="flex items-center gap-3 pointer-events-auto backdrop-blur-md bg-white/50 dark:bg-black/50 px-3 py-1.5 rounded-full border border-white/20 shadow-sm">
+            <div className="flex items-center gap-3 pointer-events-auto backdrop-blur-md bg-black/50 px-3 py-1.5 rounded-full border border-white/10 shadow-sm text-white">
                 <LanguageToggle />
-                <div className="w-px h-4 bg-gray-300 dark:bg-gray-700"></div>
+                <div className="w-px h-4 bg-white/20"></div>
                 <ThemeToggle />
             </div>
          </header>
 
-         <main className="flex-1 flex items-center justify-center p-10 overflow-hidden relative">
+         <main className="flex-1 flex items-center justify-center p-4 overflow-hidden relative">
             {loading && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 z-30 backdrop-blur-sm text-white">
                     <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin mb-4"></div>
@@ -162,7 +164,7 @@ const ResponsiveLayout = ({
                     initial={{ opacity: 0, scale: 0.98 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.4 }}
-                    className="relative w-full h-full flex items-center justify-center shadow-2xl rounded-2xl overflow-hidden border border-border-light dark:border-border-dark bg-black/50 ring-1 ring-white/10"
+                    className="relative w-full h-full flex items-center justify-center shadow-2xl rounded-2xl overflow-hidden border border-white/10 bg-black/50 ring-1 ring-white/5"
                  >
                      {children}
                  </motion.div>
@@ -173,7 +175,7 @@ const ResponsiveLayout = ({
                     transition={{ duration: 0.5 }}
                     className="flex flex-col items-center justify-center max-w-md w-full"
                 >
-                    <div className="bg-white dark:bg-gray-900/50 p-12 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800 text-center backdrop-blur-sm">
+                    <div className="bg-surface-light/95 dark:bg-gray-900/50 p-12 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800 text-center backdrop-blur-sm">
                         <div className="mb-6 flex justify-center text-gray-300 dark:text-gray-600">
                             <Palette size={64} strokeWidth={1} />
                         </div>
