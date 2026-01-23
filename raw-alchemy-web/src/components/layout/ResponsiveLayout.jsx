@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, Sliders, Palette, Download, Zap } from 'lucide-react';
+import { Settings, Sliders, Palette, Download, Zap, Info } from 'lucide-react';
 import ThemeToggle from '../ThemeToggle';
 import LanguageToggle from '../LanguageToggle';
+import InfoModal from '../InfoModal';
 
 const ResponsiveLayout = ({
   children, // The Image Component
@@ -15,6 +16,7 @@ const ResponsiveLayout = ({
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('basic');
   const [isMobile, setIsMobile] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -36,11 +38,14 @@ const ResponsiveLayout = ({
     return controls[activeTab] || null;
   };
 
+  const handleInfoClick = () => setShowInfo(true);
+
   if (isMobile) {
     // MOBILE: Bottom Navigation Layout
     // Use h-[100dvh] to handle mobile browser address bars correctly
     return (
       <div className="flex flex-col h-[100dvh] w-screen overflow-hidden bg-surface-light dark:bg-surface-dark text-gray-900 dark:text-gray-100">
+        <InfoModal isOpen={showInfo} onClose={() => setShowInfo(false)} />
 
         {/* Top: Image Area (Flexible Height) */}
         <div className="flex-1 relative bg-gray-100 dark:bg-black/95 flex items-center justify-center overflow-hidden transition-colors duration-300">
@@ -50,6 +55,14 @@ const ResponsiveLayout = ({
                     {t('appTitle')}
                 </h1>
                 <div className="flex items-center gap-2 pointer-events-auto backdrop-blur-md bg-white/30 dark:bg-black/30 px-3 py-1.5 rounded-full border border-transparent dark:border-white/10 transition-colors text-gray-900 dark:text-white">
+                    <button
+                        onClick={handleInfoClick}
+                        className="p-1 hover:text-primary-light dark:hover:text-primary-dark transition-colors"
+                        title="Info"
+                    >
+                        <Info size={16} />
+                    </button>
+                    <div className="w-px h-3 bg-gray-400/50 dark:bg-white/20"></div>
                     <LanguageToggle />
                     <ThemeToggle />
                 </div>
@@ -130,6 +143,7 @@ const ResponsiveLayout = ({
   // DESKTOP LAYOUT (Sidebar)
   return (
     <div className="flex h-screen w-screen bg-surface-light dark:bg-surface-dark text-gray-900 dark:text-gray-100 overflow-hidden font-sans">
+      <InfoModal isOpen={showInfo} onClose={() => setShowInfo(false)} />
 
       {/* Left Panel: Image Viewer */}
       <div className="flex-1 flex flex-col bg-gray-100 dark:bg-black/95 relative overflow-hidden transition-colors duration-300">
@@ -137,7 +151,15 @@ const ResponsiveLayout = ({
             <h1 className="text-sm font-bold text-gray-900 dark:text-white pointer-events-auto backdrop-blur-md bg-white/50 dark:bg-black/50 px-4 py-2 rounded-full border border-gray-200 dark:border-white/10 shadow-sm transition-colors">
                 {t('appTitle')}
             </h1>
-            <div className="flex items-center gap-3 pointer-events-auto backdrop-blur-md bg-white/50 dark:bg-black/50 px-3 py-1.5 rounded-full border border-gray-200 dark:border-white/10 shadow-sm text-gray-900 dark:text-white transition-colors">
+            <div className="flex items-center gap-3 pointer-events-auto backdrop-blur-md bg-white/50 dark:bg-black/50 px-4 py-1.5 rounded-full border border-gray-200 dark:border-white/10 shadow-sm text-gray-900 dark:text-white transition-colors">
+                <button
+                    onClick={handleInfoClick}
+                    className="p-1 hover:text-primary-light dark:hover:text-primary-dark transition-colors"
+                    title="Info"
+                >
+                    <Info size={18} />
+                </button>
+                <div className="w-px h-4 bg-gray-300 dark:bg-white/20"></div>
                 <LanguageToggle />
                 <div className="w-px h-4 bg-gray-300 dark:bg-white/20"></div>
                 <ThemeToggle />
@@ -178,9 +200,11 @@ const ResponsiveLayout = ({
                         <div className="mb-6 flex justify-center text-gray-300 dark:text-gray-600">
                             <Palette size={64} strokeWidth={1} />
                         </div>
-                        <h2 className="text-2xl font-bold mb-2 tracking-tight">Welcome to {t('appTitle')}</h2>
-                        <p className="text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
-                            Professional 16-bit RAW processing pipeline in your browser.
+                        <h2 className="text-3xl font-bold mb-3 tracking-tighter text-gray-900 dark:text-white">
+                            {t('appTitle')}
+                        </h2>
+                        <p className="text-sm font-bold text-blue-600 dark:text-blue-400 uppercase tracking-[0.2em] mb-10">
+                            {t('slogan')}
                         </p>
                         {fileInput}
                     </div>
@@ -210,7 +234,7 @@ const ResponsiveLayout = ({
 
          <div className="p-4 border-t border-border-light dark:border-border-dark text-center">
              <p className="text-[10px] text-gray-400 font-medium tracking-wide uppercase">
-                 Raw Alchemy Web &copy; {new Date().getFullYear()}
+                 {t('appTitle')} &copy; {new Date().getFullYear()}
              </p>
          </div>
       </div>
