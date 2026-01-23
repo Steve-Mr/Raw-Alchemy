@@ -13,9 +13,14 @@ def run_web_pipeline(input_path, output_path):
     input_path = os.path.abspath(input_path)
     output_path = os.path.abspath(output_path)
 
-    # 1. Start Vite Server
-    print("Starting Vite server...")
+    # 1. Start Vite Server (Preview Mode for better WASM/Worker support)
+    print("Starting Vite Preview server...")
     port = 5174
+
+    # Ensure build exists (fast check)
+    if not os.path.exists(os.path.join(WEB_DIR, 'dist')):
+        print("Dist folder not found. Running build...")
+        subprocess.run(['npm', 'run', 'build'], cwd=WEB_DIR, check=True)
 
     kwargs = {}
     if os.name == 'nt':
@@ -24,7 +29,7 @@ def run_web_pipeline(input_path, output_path):
         kwargs['preexec_fn'] = os.setsid
 
     vite_process = subprocess.Popen(
-        ['npm', 'run', 'dev', '--', '--port', str(port)],
+        ['npm', 'run', 'preview', '--', '--port', str(port)],
         cwd=WEB_DIR,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -41,6 +46,8 @@ def run_web_pipeline(input_path, output_path):
             page = browser.new_page()
 
             page.on("console", lambda msg: print(f"PAGE LOG: {msg.text}"))
+            page.on("pageerror", lambda exc: print(f"PAGE ERROR: {exc}"))
+            page.on("requestfailed", lambda req: print(f"REQ FAILED: {req.url} - {req.failure}"))
 
             print("Navigating to app...")
             page.goto(url)
@@ -52,7 +59,12 @@ def run_web_pipeline(input_path, output_path):
             file_input.set_input_files(input_path)
 
             print("Waiting for processing...")
-            page.locator('canvas').wait_for(timeout=60000)
+            try:
+                page.locator('canvas').wait_for(timeout=60000)
+            except Exception as e:
+                print("Timeout waiting for canvas. Capturing screenshot...")
+                page.screenshot(path="web_error.png")
+                raise e
 
             print("Forcing settings for parity...")
 
@@ -82,7 +94,8 @@ def run_web_pipeline(input_path, output_path):
             set_range("Input Linearization", 1.0)
 
             print("Setting Target Log Space...")
-            page.select_option('select', label='Arri LogC3')
+            # Use specific locator to avoid confusing with Metering Mode select
+            page.locator('select').filter(has_text="Arri LogC3").select_option(label='Arri LogC3')
 
             time.sleep(1)
 

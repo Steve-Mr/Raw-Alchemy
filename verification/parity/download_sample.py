@@ -4,10 +4,8 @@ import sys
 import time
 
 SAMPLE_URLS = [
-    # rawpy test image (small DNG)
-    ("https://github.com/letmaik/rawpy/raw/v0.19.0/tests/iss624.dng", "iss624.dng"),
-    # Another rawpy test image
-    ("https://github.com/letmaik/rawpy/raw/v0.19.0/tests/iss31.dng", "iss31.dng"),
+    # User provided sample (Leica M8 DNG)
+    ("https://github.com/f-spot/raw-samples/raw/refs/heads/master/DNG/RAW_LEICA_M8.DNG", "sample.dng"),
 ]
 
 DEST_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -61,7 +59,6 @@ def main():
 
     print("Error: Could not download any sample files.")
     print("Please manually place a RAW file at verification/parity/sample.raw")
-    # Don't exit 1, just warn, so I can continue my plan if I manually fix it.
     sys.exit(1)
 
 if __name__ == "__main__":

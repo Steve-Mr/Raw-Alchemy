@@ -4,3 +4,9 @@
 /dist/
 /src/raw_alchemy/vendor/lensfun
 /src/raw_alchemy/__pycache__
+verification/parity/*.raw
+verification/parity/*.dng
+verification/parity/*.pef
+verification/parity/*.tiff
+verification/parity/*.png
+verification/parity/report.md
