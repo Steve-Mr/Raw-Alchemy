@@ -31,7 +31,7 @@ def process_icons():
     dim = max(w, h)
     new_size = int(dim * 1.1)
 
-    # --- A. Standard Icons (Red on Transparent) ---
+    # --- A. Standard Icons (Original Colors on Transparent) ---
     standard_canvas = Image.new("RGBA", (new_size, new_size), (0, 0, 0, 0))
     offset = ((new_size - w) // 2, (new_size - h) // 2)
     standard_canvas.paste(logo_content, offset)
@@ -41,25 +41,18 @@ def process_icons():
         out.save(f"{output_dir}/pwa-{size}x{size}.png")
         print(f"Saved standard icon: {size}x{size}")
 
-    # --- B. Maskable Icons (White on Brand Red) ---
+    # --- B. Maskable Icons (Original Colors on Brand Red) ---
     # Background is Brand Red
     maskable_canvas = Image.new("RGBA", (new_size, new_size), BRAND_RED)
 
-    # Convert logo content to White
-    # We use the alpha channel of the logo_content as the mask
-    # and create a solid white image.
-    logo_alpha = logo_content.split()[3]
-    white_logo = Image.new("RGBA", logo_content.size, (255, 255, 255, 255))
-    white_logo.putalpha(logo_alpha)
-
-    # Resize logic for maskable safety zone (65% size)
-    logo_for_maskable = white_logo.copy()
+    # Use the original logo content (with transparency), scaled down
+    logo_for_maskable = logo_content.copy()
     logo_for_maskable.thumbnail((int(new_size * 0.65), int(new_size * 0.65)), Image.Resampling.LANCZOS)
 
     mw, mh = logo_for_maskable.size
     moffset = ((new_size - mw) // 2, (new_size - mh) // 2)
 
-    # Paste the white logo onto the red background
+    # Paste the original logo onto the red background
     maskable_canvas.paste(logo_for_maskable, moffset, logo_for_maskable)
 
     for size in [192, 512]:
@@ -68,11 +61,13 @@ def process_icons():
         print(f"Saved maskable icon: {size}x{size}")
 
     # --- C. Monochrome Icon (Solid Silhouette) ---
-    # Usually white or black, transparency defines shape.
-    # We'll use the solid white version we just created, but on transparent background.
-    mono_canvas = Image.new("RGBA", (new_size, new_size), (0,0,0,0))
+    # Create a white version for the monochrome icon
+    # Use the alpha channel of the logo content as the mask
+    logo_alpha = logo_content.split()[3]
+    white_logo = Image.new("RGBA", logo_content.size, (255, 255, 255, 255))
+    white_logo.putalpha(logo_alpha)
 
-    # Use the white logo (full size)
+    mono_canvas = Image.new("RGBA", (new_size, new_size), (0,0,0,0))
     mono_canvas.paste(white_logo, offset, white_logo)
 
     out_mono = mono_canvas.resize((512, 512), Image.Resampling.LANCZOS)
