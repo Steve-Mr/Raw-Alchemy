@@ -331,6 +331,7 @@ const RawUploader = () => {
     {/* Hidden Input - Always rendered to preserve ref */}
     <input
         ref={fileInputRef}
+        id="raw-upload-input"
         type="file"
         name="file_upload"
         className="hidden"

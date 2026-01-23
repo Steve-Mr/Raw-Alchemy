@@ -69,6 +69,8 @@ const ColorControls = ({
                 </span>
                 <input
                     ref={fileInputRef}
+                    id="lut-upload-input"
+                    name="lut_upload"
                     type="file"
                     accept=".cube"
                     onChange={onLutSelect}
