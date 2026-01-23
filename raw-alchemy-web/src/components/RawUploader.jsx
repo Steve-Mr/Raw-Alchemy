@@ -12,15 +12,13 @@ import ToneControls from './controls/ToneControls';
 import ColorControls from './controls/ColorControls';
 import ExportControls from './controls/ExportControls';
 import AdvancedControls from './controls/AdvancedControls';
-import { UploadCloud } from 'lucide-react';
+import { UploadCloud, XCircle, RefreshCw } from 'lucide-react';
 
 const RawUploader = () => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [imageState, setImageState] = useState(null); // { data, width, height, channels, bitDepth, mode }
-  // Removed 'mode' state, strictly enforcing 'rgb'
-
+  const [imageState, setImageState] = useState(null);
   const [metadata, setMetadata] = useState(null);
 
   // LUT State
@@ -58,6 +56,9 @@ const RawUploader = () => {
   const exportWorkerRef = useRef(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [imgStats, setImgStats] = useState(null);
+
+  // Ref for the hidden file input to trigger it programmatically
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     return () => {
@@ -139,7 +140,6 @@ const RawUploader = () => {
 
     try {
       const buffer = await fileToProcess.arrayBuffer();
-      // Strictly enforce 'rgb' mode
       workerRef.current.postMessage({
         command: 'decode',
         fileBuffer: buffer,
@@ -222,6 +222,23 @@ const RawUploader = () => {
     }
   };
 
+  const handleRemoveImage = () => {
+      setImageState(null);
+      setSelectedFile(null);
+      setMetadata(null);
+      // Reset critical pipeline state
+      setLutData(null);
+      setLutName(null);
+      // Reset file input value so same file can be selected again
+      if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleTriggerUpload = () => {
+      if (fileInputRef.current) {
+          fileInputRef.current.click();
+      }
+  };
+
   const handleLutSelect = (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -258,25 +275,34 @@ const RawUploader = () => {
 
   // Styled File Input Component
   const FileInput = (
-    <div className="flex flex-col items-center">
-        <label className="flex flex-col items-center justify-center w-full h-32 px-4 transition bg-white dark:bg-gray-900 border-2 border-gray-300 dark:border-gray-700 border-dashed rounded-2xl appearance-none cursor-pointer hover:border-primary-light dark:hover:border-primary-dark hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none">
-            <div className="flex flex-col items-center space-y-2">
-                <UploadCloud className="w-8 h-8 text-gray-400" />
-                <span className="font-medium text-gray-600 dark:text-gray-300">
-                    {t('uploadPrompt')}
-                </span>
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                    .ARW, .CR2, .DNG, .NEF, .ORF, .RAF
-                </span>
+    <div className="flex flex-col items-center w-full">
+        <label
+            onClick={handleTriggerUpload}
+            className="flex flex-col items-center justify-center w-full h-40 px-4 transition-all bg-white dark:bg-gray-900 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-3xl cursor-pointer hover:border-primary-light dark:hover:border-primary-dark hover:bg-gray-50 dark:hover:bg-gray-800/80 group"
+        >
+            <div className="flex flex-col items-center space-y-4">
+                <div className="p-4 rounded-full bg-gray-100 dark:bg-gray-800 group-hover:scale-110 transition-transform">
+                    <UploadCloud className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+                </div>
+                <div className="text-center">
+                    <span className="font-semibold text-gray-700 dark:text-gray-200 block mb-1">
+                        {t('uploadPrompt')}
+                    </span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                        RAW (.ARW, .CR2, .DNG...)
+                    </span>
+                </div>
             </div>
-            <input
-                type="file"
-                name="file_upload"
-                className="hidden"
-                accept=".ARW,.CR2,.CR3,.DNG,.NEF,.ORF,.RAF"
-                onChange={handleFileSelect}
-            />
         </label>
+        {/* Hidden Input */}
+        <input
+            ref={fileInputRef}
+            type="file"
+            name="file_upload"
+            className="hidden"
+            accept=".ARW,.CR2,.CR3,.DNG,.NEF,.ORF,.RAF"
+            onChange={handleFileSelect}
+        />
     </div>
   );
 
@@ -317,28 +343,48 @@ const RawUploader = () => {
         }}
     >
         {imageState && (
-            <GLCanvas
-                ref={glCanvasRef}
-                width={imageState.width}
-                height={imageState.height}
-                data={imageState.data}
-                channels={imageState.channels}
-                bitDepth={imageState.bitDepth}
-                wbMultipliers={[wbRed, wbGreen, wbBlue]}
-                camToProPhotoMatrix={camToProPhotoMat}
-                proPhotoToTargetMatrix={proPhotoToTargetMat}
-                logCurveType={LOG_SPACE_CONFIG[targetLogSpace] ? LOG_SPACE_CONFIG[targetLogSpace].id : 0}
-                exposure={exposure}
-                saturation={saturation}
-                contrast={contrast}
-                highlights={highlights}
-                shadows={shadows}
-                whites={whites}
-                blacks={blacks}
-                inputGamma={inputGamma}
-                lutData={lutData}
-                lutSize={lutSize}
-            />
+            <div className="relative w-full h-full flex items-center justify-center">
+                {/* Floating Action Buttons Overlay */}
+                <div className="absolute top-4 right-4 z-50 flex gap-2">
+                    <button
+                        onClick={handleTriggerUpload}
+                        className="p-2 bg-black/50 hover:bg-black/70 text-white rounded-full backdrop-blur-md transition-all shadow-lg border border-white/10"
+                        title={t('actions.replace')}
+                    >
+                        <RefreshCw size={18} />
+                    </button>
+                    <button
+                        onClick={handleRemoveImage}
+                        className="p-2 bg-red-500/80 hover:bg-red-600 text-white rounded-full backdrop-blur-md transition-all shadow-lg border border-white/10"
+                        title={t('actions.remove')}
+                    >
+                        <XCircle size={18} />
+                    </button>
+                </div>
+
+                <GLCanvas
+                    ref={glCanvasRef}
+                    width={imageState.width}
+                    height={imageState.height}
+                    data={imageState.data}
+                    channels={imageState.channels}
+                    bitDepth={imageState.bitDepth}
+                    wbMultipliers={[wbRed, wbGreen, wbBlue]}
+                    camToProPhotoMatrix={camToProPhotoMat}
+                    proPhotoToTargetMatrix={proPhotoToTargetMat}
+                    logCurveType={LOG_SPACE_CONFIG[targetLogSpace] ? LOG_SPACE_CONFIG[targetLogSpace].id : 0}
+                    exposure={exposure}
+                    saturation={saturation}
+                    contrast={contrast}
+                    highlights={highlights}
+                    shadows={shadows}
+                    whites={whites}
+                    blacks={blacks}
+                    inputGamma={inputGamma}
+                    lutData={lutData}
+                    lutSize={lutSize}
+                />
+            </div>
         )}
     </ResponsiveLayout>
   );

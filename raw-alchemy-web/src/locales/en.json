@@ -1,30 +1,31 @@
 {
-  "appTitle": "RAW Processing Engine",
+  "appTitle": "Raw Alchemy",
   "uploadPrompt": "Select RAW File",
-  "loadingDecoding": "Decoding RAW data in Web Worker...",
-  "exporting": "Reading GPU Data & Encoding...",
-  "exportingSub": "This may take a moment.",
+  "loadingDecoding": "Decoding...",
+  "exporting": "Encoding...",
+  "exportingSub": "Please wait.",
   "error": "Error",
   "tabs": {
     "basic": "Basic",
     "tone": "Grading",
     "color": "Color",
-    "export": "Export"
+    "export": "Export",
+    "advanced": "Advanced"
   },
   "basic": {
     "wb": "White Balance",
-    "red": "Red Gain",
-    "green": "Green Gain",
-    "blue": "Blue Gain",
-    "exposure": "Exposure (EV)",
+    "red": "Red",
+    "green": "Green",
+    "blue": "Blue",
+    "exposure": "Exposure",
     "contrast": "Contrast",
     "saturation": "Saturation",
-    "metering": "Metering Mode",
+    "metering": "Metering",
     "meteringModes": {
       "hybrid": "Hybrid",
       "matrix": "Matrix",
-      "center-weighted": "Center Weighted",
-      "highlight-safe": "Highlight Safe",
+      "center-weighted": "Center",
+      "highlight-safe": "Safe",
       "average": "Average"
     }
   },
@@ -35,33 +36,37 @@
     "blacks": "Blacks"
   },
   "color": {
-    "targetSpace": "Target Log Space",
-    "lut": "3D LUT (.cube)",
-    "loadLut": "Load .cube LUT",
-    "noLut": "No LUT loaded",
-    "lutApplied": "LUT Applied",
-    "lutNote": "Applied after Log encoding. Standard Adobe .cube supported."
+    "targetSpace": "Output Log Space",
+    "lut": "3D LUT",
+    "loadLut": "Load .cube",
+    "noLut": "None",
+    "lutApplied": "Active",
+    "lutNote": "Applied post-log."
   },
   "export": {
-    "format": "File Format",
-    "button": "Export Image",
-    "encoding": "Encoding..."
+    "format": "Format",
+    "button": "Save Image",
+    "encoding": "Processing..."
   },
   "advanced": {
-    "title": "Advanced Settings",
-    "inputLinearization": "Input Linearization",
-    "inputLinearizationNote": "If image is washed out, try setting to 2.2 or 1.8",
-    "imageVerification": "Image Verification",
-    "analyze": "Analyze Image Stats",
-    "statsNote": "Note: Log curves lift blacks. A result matching the Log floor confirms correct Linear Input.",
+    "title": "Advanced",
+    "inputLinearization": "Input Gamma",
+    "inputLinearizationNote": "Adjust if image appears washed out (1.0 - 2.2).",
+    "imageVerification": "Stats",
+    "analyze": "Analyze",
+    "statsNote": "Values match Log floor.",
     "min": "Min",
     "max": "Max",
-    "mean": "Mean"
+    "mean": "Avg"
   },
   "fileInfo": {
-    "dimensions": "Dimensions",
-    "channels": "Channels",
-    "bitDepth": "Bit Depth",
-    "bufferSize": "Buffer Size"
+    "dimensions": "Dim",
+    "channels": "Ch",
+    "bitDepth": "Bit",
+    "bufferSize": "Size"
+  },
+  "actions": {
+    "remove": "Remove Image",
+    "replace": "Replace"
   }
 }

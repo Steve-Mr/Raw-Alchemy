@@ -2,31 +2,44 @@ import React, { useEffect, useState } from 'react';
 import { Moon, Sun } from 'lucide-react';
 
 const ThemeToggle = () => {
-  const [darkMode, setDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-        return document.documentElement.classList.contains('dark') ||
-               localStorage.getItem('theme') === 'dark';
-    }
-    return false;
-  });
+  // Use state to trigger re-renders, but rely on DOM for truth to sync with index.css
+  const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
+    // Initial check
+    const root = document.documentElement;
+    const hasDarkClass = root.classList.contains('dark');
+    const storedTheme = localStorage.getItem('theme');
+
+    if (storedTheme === 'dark' || (!storedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        root.classList.add('dark');
+        setIsDark(true);
     } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
+        root.classList.remove('dark');
+        setIsDark(false);
     }
-  }, [darkMode]);
+  }, []);
+
+  const toggleTheme = () => {
+    const root = document.documentElement;
+    if (root.classList.contains('dark')) {
+      root.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+      setIsDark(false);
+    } else {
+      root.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+      setIsDark(true);
+    }
+  };
 
   return (
     <button
-      onClick={() => setDarkMode(!darkMode)}
+      onClick={toggleTheme}
       className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200"
       aria-label="Toggle Theme"
     >
-      {darkMode ? <Moon size={20} /> : <Sun size={20} />}
+      {isDark ? <Moon size={20} /> : <Sun size={20} />}
     </button>
   );
 };
