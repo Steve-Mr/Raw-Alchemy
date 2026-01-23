@@ -274,14 +274,20 @@ const RawUploader = () => {
   };
 
   // Reset Functions
-  const resetBasic = () => {
+  const resetWB = () => {
       setWbRed(1.0);
       setWbGreen(1.0);
       setWbBlue(1.0);
+  };
+
+  const resetExposureSettings = () => {
       setExposure(0.0);
+      setMeteringMode('hybrid');
+  };
+
+  const resetEnhancements = () => {
       setContrast(1.1);
       setSaturation(1.25);
-      setMeteringMode('hybrid');
   };
 
   const resetTone = () => {
@@ -345,7 +351,9 @@ const RawUploader = () => {
                 contrast={contrast} setContrast={setContrast}
                 saturation={saturation} setSaturation={setSaturation}
                 meteringMode={meteringMode} setMeteringMode={setMeteringMode}
-                onReset={resetBasic}
+                onResetWB={resetWB}
+                onResetExposure={resetExposureSettings}
+                onResetEnhancements={resetEnhancements}
             />,
             tone: <ToneControls
                 highlights={highlights} setHighlights={setHighlights}
@@ -375,14 +383,14 @@ const RawUploader = () => {
                 <div className="absolute bottom-6 right-6 z-50 flex gap-3">
                     <button
                         onClick={handleTriggerUpload}
-                        className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur-md transition-all shadow-2xl border border-white/10 hover:scale-105 active:scale-95"
+                        className="p-3 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black/70 text-gray-700 dark:text-white rounded-full backdrop-blur-md transition-all shadow-xl border border-gray-200 dark:border-white/10 hover:scale-105 active:scale-95"
                         title={t('actions.replace')}
                     >
                         <RefreshCw size={20} />
                     </button>
                     <button
                         onClick={handleRemoveImage}
-                        className="p-3 bg-red-500/80 hover:bg-red-600 text-white rounded-full backdrop-blur-md transition-all shadow-2xl border border-white/10 hover:scale-105 active:scale-95"
+                        className="p-3 bg-red-100 dark:bg-red-900/50 hover:bg-red-200 dark:hover:bg-red-900/70 text-red-600 dark:text-red-400 rounded-full backdrop-blur-md transition-all shadow-xl border border-red-200 dark:border-red-800/30 hover:scale-105 active:scale-95"
                         title={t('actions.remove')}
                     >
                         <XCircle size={20} />

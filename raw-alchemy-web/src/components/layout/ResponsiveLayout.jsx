@@ -43,13 +43,13 @@ const ResponsiveLayout = ({
       <div className="flex flex-col h-[100dvh] w-screen overflow-hidden bg-surface-light dark:bg-surface-dark text-gray-900 dark:text-gray-100">
 
         {/* Top: Image Area (Flexible Height) */}
-        <div className="flex-1 relative bg-black/95 flex items-center justify-center overflow-hidden">
+        <div className="flex-1 relative bg-gray-100 dark:bg-black/95 flex items-center justify-center overflow-hidden transition-colors duration-300">
              {/* Header Overlay */}
             <header className="absolute top-0 left-0 right-0 p-3 flex justify-between items-center z-10 pointer-events-none">
-                <h1 className="text-xs font-bold text-white/50 pointer-events-auto backdrop-blur-md bg-black/20 px-2 py-1 rounded-lg uppercase tracking-widest">
+                <h1 className="text-xs font-bold text-gray-900/50 dark:text-white/50 pointer-events-auto backdrop-blur-md bg-white/20 dark:bg-black/20 px-2 py-1 rounded-lg uppercase tracking-widest border border-gray-200 dark:border-white/10 shadow-sm transition-colors">
                     {t('appTitle')}
                 </h1>
-                <div className="flex items-center gap-2 pointer-events-auto backdrop-blur-md bg-black/20 px-2 py-1 rounded-lg">
+                <div className="flex items-center gap-2 pointer-events-auto backdrop-blur-md bg-white/20 dark:bg-black/20 px-2 py-1 rounded-lg border border-gray-200 dark:border-white/10 shadow-sm transition-colors text-gray-900 dark:text-white">
                     <LanguageToggle />
                     <ThemeToggle />
                 </div>

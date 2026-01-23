@@ -32,29 +32,29 @@ const BasicControls = ({
   contrast, setContrast,
   saturation, setSaturation,
   meteringMode, setMeteringMode,
-  onReset
+  onResetWB,
+  onResetExposure,
+  onResetEnhancements
 }) => {
   const { t } = useTranslation();
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
-          <button
-              onClick={onReset}
-              className="text-xs flex items-center gap-1.5 text-gray-500 hover:text-primary-light dark:hover:text-primary-dark transition-colors px-2 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
-              title={t('actions.reset')}
-          >
-              <RotateCcw size={14} />
-              {t('actions.reset')}
-          </button>
-      </div>
-
       {/* White Balance */}
       <div className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-800 p-5 rounded-2xl shadow-sm">
-        <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-          <Sun size={14} />
-          {t('basic.wb')}
-        </h3>
+        <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
+            <Sun size={14} />
+            {t('basic.wb')}
+            </h3>
+            <button
+                onClick={onResetWB}
+                className="text-gray-400 hover:text-primary-light dark:hover:text-primary-dark transition-colors p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
+                title={t('actions.reset')}
+            >
+                <RotateCcw size={14} />
+            </button>
+        </div>
         <ControlItem label={t('basic.red')} value={wbRed} onChange={setWbRed} min={0.1} max={5.0} step={0.01} />
         <ControlItem label={t('basic.green')} value={wbGreen} onChange={setWbGreen} min={0.1} max={5.0} step={0.01} />
         <ControlItem label={t('basic.blue')} value={wbBlue} onChange={setWbBlue} min={0.1} max={5.0} step={0.01} />
@@ -63,10 +63,19 @@ const BasicControls = ({
       {/* Exposure & Metering */}
       <div className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-800 p-5 rounded-2xl shadow-sm">
         <div className="flex justify-between items-center mb-4">
-             <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                <Gauge size={14} />
-                {t('basic.metering')}
-            </h3>
+             <div className="flex items-center gap-3">
+                <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                    <Gauge size={14} />
+                    {t('basic.metering')}
+                </h3>
+                <button
+                    onClick={onResetExposure}
+                    className="text-gray-400 hover:text-primary-light dark:hover:text-primary-dark transition-colors p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
+                    title={t('actions.reset')}
+                >
+                    <RotateCcw size={14} />
+                </button>
+             </div>
             <select
                 value={meteringMode}
                 onChange={(e) => setMeteringMode(e.target.value)}
@@ -84,10 +93,19 @@ const BasicControls = ({
 
       {/* Contrast & Saturation */}
       <div className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-800 p-5 rounded-2xl shadow-sm">
-         <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-            <Contrast size={14} />
-            Adjustments
-        </h3>
+         <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                <Contrast size={14} />
+                Adjustments
+            </h3>
+            <button
+                onClick={onResetEnhancements}
+                className="text-gray-400 hover:text-primary-light dark:hover:text-primary-dark transition-colors p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
+                title={t('actions.reset')}
+            >
+                <RotateCcw size={14} />
+            </button>
+         </div>
         <ControlItem
             label={t('basic.contrast')}
             value={contrast}
