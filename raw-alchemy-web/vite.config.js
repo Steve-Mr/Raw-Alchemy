@@ -16,7 +16,7 @@ export default defineConfig({
         name: 'Nitrate Grain',
         short_name: 'Nitrate Grain',
         description: 'Shadows with a pulse',
-        theme_color: '#ffffff',
+        // theme_color removed to allow dynamic meta tag to take precedence for status bar
         background_color: '#ffffff',
         display: 'standalone',
         start_url: '/',
