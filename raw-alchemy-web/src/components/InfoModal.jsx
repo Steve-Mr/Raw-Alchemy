@@ -2,7 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { X, Github } from 'lucide-react';
-import logo from '../assets/logo.png';
+import logo from '../assets/app_logo.png';
 
 const InfoModal = ({ isOpen, onClose }) => {
   const { t } = useTranslation();
