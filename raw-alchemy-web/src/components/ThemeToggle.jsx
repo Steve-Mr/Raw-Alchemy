@@ -5,18 +5,29 @@ const ThemeToggle = () => {
   // Use state to trigger re-renders, but rely on DOM for truth to sync with index.css
   const [isDark, setIsDark] = useState(false);
 
+  // Helper to update meta theme-color for PWA status bar
+  const updateMetaThemeColor = (isDarkMode) => {
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+      metaThemeColor.setAttribute('content', isDarkMode ? '#09090b' : '#ffffff');
+    }
+  };
+
   useEffect(() => {
     // Initial check
     const root = document.documentElement;
-    const hasDarkClass = root.classList.contains('dark');
     const storedTheme = localStorage.getItem('theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const shouldUseDark = storedTheme === 'dark' || (!storedTheme && prefersDark);
 
-    if (storedTheme === 'dark' || (!storedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    if (shouldUseDark) {
         root.classList.add('dark');
         setIsDark(true);
+        updateMetaThemeColor(true);
     } else {
         root.classList.remove('dark');
         setIsDark(false);
+        updateMetaThemeColor(false);
     }
   }, []);
 
@@ -26,10 +37,12 @@ const ThemeToggle = () => {
       root.classList.remove('dark');
       localStorage.setItem('theme', 'light');
       setIsDark(false);
+      updateMetaThemeColor(false);
     } else {
       root.classList.add('dark');
       localStorage.setItem('theme', 'dark');
       setIsDark(true);
+      updateMetaThemeColor(true);
     }
   };
 

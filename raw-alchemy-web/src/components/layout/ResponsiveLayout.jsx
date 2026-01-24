@@ -50,7 +50,10 @@ const ResponsiveLayout = ({
         {/* Top: Image Area (Flexible Height) */}
         <div className="flex-1 relative bg-gray-100 dark:bg-black/95 flex items-center justify-center overflow-hidden transition-colors duration-300">
              {/* Header Overlay */}
-            <header className="absolute top-0 left-0 right-0 p-3 flex justify-between items-center z-10 pointer-events-none">
+            <header
+              className="absolute top-0 left-0 right-0 p-3 flex justify-between items-center z-10 pointer-events-none"
+              style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+            >
                 <h1 className="text-xs font-bold text-gray-900 dark:text-white pointer-events-auto backdrop-blur-md bg-white/30 dark:bg-black/30 px-3 py-1.5 rounded-full border border-transparent dark:border-white/10 uppercase tracking-widest shadow-sm transition-colors">
                     {t('appTitle')}
                 </h1>
@@ -111,8 +114,14 @@ const ResponsiveLayout = ({
         </div>
 
         {/* Bottom: Tab Navigation Bar (Fixed) */}
-        <div className="flex-none bg-surface-light dark:bg-surface-dark border-t border-border-light dark:border-border-dark pb-safe">
-            <div className="flex items-stretch h-16">
+        <div className="flex-none bg-surface-light dark:bg-surface-dark border-t border-border-light dark:border-border-dark">
+            <div
+              className="flex items-stretch"
+              style={{
+                  height: 'calc(4rem + env(safe-area-inset-bottom))',
+                  paddingBottom: 'env(safe-area-inset-bottom)'
+              }}
+            >
                 {tabs.map((tab) => {
                     const isActive = activeTab === tab.id;
                     return (
