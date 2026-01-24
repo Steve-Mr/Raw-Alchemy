@@ -116,8 +116,11 @@ const ResponsiveLayout = ({
         {/* Bottom: Tab Navigation Bar (Fixed) */}
         <div className="flex-none bg-surface-light dark:bg-surface-dark border-t border-border-light dark:border-border-dark">
             <div
-              className="flex items-stretch h-16"
-              style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+              className="flex items-stretch"
+              style={{
+                  height: 'calc(4rem + env(safe-area-inset-bottom))',
+                  paddingBottom: 'env(safe-area-inset-bottom)'
+              }}
             >
                 {tabs.map((tab) => {
                     const isActive = activeTab === tab.id;
