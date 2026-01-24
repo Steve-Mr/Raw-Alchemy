@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { openDB } from 'idb';
 import GLCanvas from './GLCanvas';
 import { getProPhotoToTargetMatrix, formatMatrixForUniform, LOG_SPACE_CONFIG } from '../utils/colorMath';
 import { calculateAutoExposure } from '../utils/metering';
@@ -65,6 +66,38 @@ const RawUploader = () => {
       workerRef.current?.terminate();
       exportWorkerRef.current?.terminate();
     };
+  }, []);
+
+  useEffect(() => {
+    // Check for shared target query param
+    const checkSharedFile = async () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('shared_target') === 'true') {
+            try {
+                const db = await openDB('nitrate-grain-share', 1);
+                const file = await db.get('shared-files', 'latest-share');
+
+                if (file) {
+                    // Check if file is valid
+                    if (file instanceof Blob) {
+                        setSelectedFile(file);
+                        handleProcess(file);
+                    }
+
+                    // Clean up
+                    await db.delete('shared-files', 'latest-share');
+                }
+
+                // Clean URL
+                const newUrl = window.location.pathname;
+                window.history.replaceState({}, document.title, newUrl);
+            } catch (err) {
+                console.error("Error retrieving shared file:", err);
+            }
+        }
+    };
+
+    checkSharedFile();
   }, []);
 
   useEffect(() => {
