@@ -71,6 +71,7 @@
   "actions": {
     "remove": "移除图片",
     "replace": "替换",
-    "reset": "重置"
+    "reset": "重置",
+    "original": "原图"
   }
 }

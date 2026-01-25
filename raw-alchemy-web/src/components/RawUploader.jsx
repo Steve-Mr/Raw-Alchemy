@@ -13,7 +13,7 @@ import ToneControls from './controls/ToneControls';
 import ColorControls from './controls/ColorControls';
 import ExportControls from './controls/ExportControls';
 import AdvancedControls from './controls/AdvancedControls';
-import { UploadCloud, XCircle, RefreshCw } from 'lucide-react';
+import { UploadCloud, XCircle, RefreshCw, History } from 'lucide-react';
 
 const RawUploader = () => {
   const { t } = useTranslation();
@@ -426,6 +426,16 @@ const RawUploader = () => {
                 onTouchEnd={() => setIsComparing(false)}
                 onTouchCancel={() => setIsComparing(false)}
             >
+                {/* Comparison Indicator */}
+                {isComparing && (
+                    <div className="absolute top-6 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none">
+                        <div className="flex items-center gap-2 px-4 py-2 bg-black/70 backdrop-blur-md rounded-full text-white shadow-xl border border-white/20">
+                            <History size={16} className="text-primary-400" />
+                            <span className="text-sm font-medium tracking-wide">{t('actions.original')}</span>
+                        </div>
+                    </div>
+                )}
+
                 {/* Floating Action Buttons Overlay - Moved to bottom right to avoid header overlap */}
                 <div className="absolute bottom-6 right-6 z-50 flex gap-3 pointer-events-auto">
                     <button
