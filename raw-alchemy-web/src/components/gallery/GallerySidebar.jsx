@@ -56,24 +56,6 @@ const GallerySidebar = ({
                 </div>
              )}
 
-            {/* Upload Area */}
-            <div className="p-4 shrink-0">
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    className="hidden"
-                    accept=".ARW,.CR2,.CR3,.DNG,.NEF,.ORF,.RAF"
-                    onChange={handleFileSelect}
-                />
-                <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-primary-600 hover:bg-primary-700 text-white rounded-xl shadow-sm transition-all active:scale-95 text-xs font-medium"
-                >
-                    <Upload size={14} />
-                    {t('addImages', 'Add Images')}
-                </button>
-            </div>
 
             {/* List */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">

@@ -15,7 +15,7 @@ import BasicControls from './controls/BasicControls';
 import ToneControls from './controls/ToneControls';
 import ColorControls from './controls/ColorControls';
 import ExportControls from './controls/ExportControls';
-import { History } from 'lucide-react';
+import { UploadCloud, XCircle, RefreshCw, History } from 'lucide-react';
 
 const RawUploader = () => {
   const { t } = useTranslation();
@@ -76,6 +76,7 @@ const RawUploader = () => {
   const glCanvasRef = useRef(null);
   const workerRef = useRef(null);
   const exportWorkerRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Cleanup Workers
   useEffect(() => {
@@ -345,10 +346,66 @@ const RawUploader = () => {
   const resetTone = () => { setHighlights(0.0); setShadows(0.0); setWhites(0.0); setBlacks(0.0); };
   const resetAdvanced = () => { setInputGamma(1.0); setImgStats(null); };
 
+  const handleFileSelect = (e) => {
+    if (e.target.files) {
+        processUploads(e.target.files);
+    }
+    // No need to set selected file here, the gallery will handle selection once processed
+    // Or we could auto-select the first one. `processUploads` does that.
+  };
+
+  const handleTriggerUpload = () => {
+      if (fileInputRef.current) {
+          fileInputRef.current.click();
+      }
+  };
+
+  const handleRemoveImage = () => {
+      if (activeImageId) {
+          removeImage(activeImageId);
+      }
+  };
+
+  // Styled File Input Component
+  const FileInput = (
+    <div className="flex flex-col items-center w-full">
+        <label
+            onClick={handleTriggerUpload}
+            className="flex flex-col items-center justify-center w-full h-40 px-4 transition-all bg-white dark:bg-gray-900 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-3xl cursor-pointer hover:border-primary-light dark:hover:border-primary-dark hover:bg-gray-50 dark:hover:bg-gray-800/80 group"
+        >
+            <div className="flex flex-col items-center space-y-4">
+                <div className="p-4 rounded-full bg-gray-100 dark:bg-gray-800 group-hover:scale-110 transition-transform">
+                    <UploadCloud className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+                </div>
+                <div className="text-center">
+                    <span className="font-semibold text-gray-700 dark:text-gray-200 block mb-1">
+                        {t('uploadPrompt')}
+                    </span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                        RAW (.ARW, .CR2, .DNG...)
+                    </span>
+                </div>
+            </div>
+        </label>
+    </div>
+  );
+
   return (
+    <>
+    <input
+        ref={fileInputRef}
+        id="raw-upload-input"
+        type="file"
+        name="file_upload"
+        className="hidden"
+        accept=".ARW,.CR2,.CR3,.DNG,.NEF,.ORF,.RAF"
+        onChange={handleFileSelect}
+        multiple // Enable multiple files
+    />
     <ResponsiveLayout
         loading={loading}
         error={error}
+        fileInput={FileInput}
         gallerySidebar={
             <GallerySidebar
                 images={images}
@@ -413,6 +470,24 @@ const RawUploader = () => {
                     </div>
                 )}
 
+                {/* Floating Action Buttons Overlay - Moved to bottom right to avoid header overlap */}
+                <div className="absolute bottom-6 right-6 z-50 flex gap-3 pointer-events-auto">
+                    <button
+                        onClick={handleTriggerUpload}
+                        className="p-3 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black/70 text-gray-700 dark:text-white rounded-full backdrop-blur-md transition-all shadow-xl border border-gray-200 dark:border-white/10 hover:scale-105 active:scale-95"
+                        title={t('actions.replace')}
+                    >
+                        <RefreshCw size={20} />
+                    </button>
+                    <button
+                        onClick={handleRemoveImage}
+                        className="p-3 bg-red-100 dark:bg-red-900/50 hover:bg-red-200 dark:hover:bg-red-900/70 text-red-600 dark:text-red-400 rounded-full backdrop-blur-md transition-all shadow-xl border border-red-200 dark:border-red-800/30 hover:scale-105 active:scale-95"
+                        title={t('actions.remove')}
+                    >
+                        <XCircle size={20} />
+                    </button>
+                </div>
+
                 <GLCanvas
                     ref={glCanvasRef}
                     width={imageState.width}
@@ -438,6 +513,7 @@ const RawUploader = () => {
             </div>
         )}
     </ResponsiveLayout>
+    </>
   );
 };
 

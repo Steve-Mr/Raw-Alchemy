@@ -90,10 +90,6 @@ export const useGallery = () => {
                 if (thumbData.blob) {
                     thumbBlob = thumbData.blob;
                 } else if (thumbData.buffer) {
-                    // Create canvas to draw buffer and convert to blob?
-                    // Or just save buffer. But for display <img src> we want Blob or URL.
-                    // Let's store Blob.
-                    // The worker sent RGBA buffer.
                     const canvas = new OffscreenCanvas(thumbData.width, thumbData.height);
                     const ctx = canvas.getContext('2d');
                     const imgData = new ImageData(new Uint8ClampedArray(thumbData.buffer), thumbData.width, thumbData.height);
@@ -120,7 +116,11 @@ export const useGallery = () => {
                 console.error(`Failed to process ${item.file.name}:`, err);
                 setError(`Failed to process ${item.file.name}: ${err.message}`);
             } finally {
-                setProcessingQueue(prev => prev.filter(p => p.id !== item.id));
+                // Must ensure this update happens
+                setProcessingQueue(prev => {
+                    const next = prev.filter(p => p.id !== item.id);
+                    return next;
+                });
             }
         }
     }, []);

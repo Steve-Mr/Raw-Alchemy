@@ -10,6 +10,7 @@ const ResponsiveLayout = ({
   children, // The Image Component
   controls, // { basic, tone, color, export }
   gallerySidebar, // The Gallery Component
+  fileInput,
   loading,
   error
 }) => {
@@ -86,7 +87,13 @@ const ResponsiveLayout = ({
             )}
 
             <div className="w-full h-full p-2">
-                 {children}
+                 {!children && activeTab !== 'gallery' ? (
+                     <div className="w-full h-full flex items-center justify-center p-6">
+                         {fileInput}
+                     </div>
+                 ) : (
+                     children
+                 )}
             </div>
         </div>
 
@@ -229,16 +236,17 @@ const ResponsiveLayout = ({
                     transition={{ duration: 0.5 }}
                     className="flex flex-col items-center justify-center max-w-md w-full"
                 >
-                    <div className="bg-surface-light/95 dark:bg-gray-900/50 p-12 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800 text-center backdrop-blur-sm opacity-50">
+                    <div className="bg-surface-light/95 dark:bg-gray-900/50 p-12 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800 text-center backdrop-blur-sm">
                         <div className="mb-6 flex justify-center text-gray-300 dark:text-gray-600">
                             <Palette size={64} strokeWidth={1} />
                         </div>
-                        <h2 className="text-2xl font-bold mb-2 tracking-tighter text-gray-900 dark:text-white">
-                            Select an Image
+                        <h2 className="text-3xl font-bold mb-3 tracking-tighter text-gray-900 dark:text-white">
+                            {t('appTitle')}
                         </h2>
-                        <p className="text-sm text-gray-500">
-                            Choose an image from the gallery to start editing.
+                        <p className="text-sm font-bold text-blue-600 dark:text-blue-400 uppercase tracking-[0.2em] mb-10">
+                            {t('slogan')}
                         </p>
+                        {fileInput}
                     </div>
                 </motion.div>
             )}
