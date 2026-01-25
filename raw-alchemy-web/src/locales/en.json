@@ -71,6 +71,7 @@
   "actions": {
     "remove": "Remove Image",
     "replace": "Replace",
-    "reset": "Reset"
+    "reset": "Reset",
+    "original": "Original"
   }
 }

@@ -13,7 +13,7 @@ import ToneControls from './controls/ToneControls';
 import ColorControls from './controls/ColorControls';
 import ExportControls from './controls/ExportControls';
 import AdvancedControls from './controls/AdvancedControls';
-import { UploadCloud, XCircle, RefreshCw } from 'lucide-react';
+import { UploadCloud, XCircle, RefreshCw, History } from 'lucide-react';
 
 const RawUploader = () => {
   const { t } = useTranslation();
@@ -34,8 +34,10 @@ const RawUploader = () => {
 
   // Basic Adjustments State
   const [exposure, setExposure] = useState(0.0);
-  const [saturation, setSaturation] = useState(1.25);
-  const [contrast, setContrast] = useState(1.1);
+  const [initialExposure, setInitialExposure] = useState(0.0);
+  const [saturation, setSaturation] = useState(1.0);
+  const [contrast, setContrast] = useState(1.0);
+  const [isComparing, setIsComparing] = useState(false);
 
   // Advanced Tone Mapping
   const [highlights, setHighlights] = useState(0.0);
@@ -48,7 +50,7 @@ const RawUploader = () => {
 
   const [camToProPhotoMat, setCamToProPhotoMat] = useState(null);
   const [proPhotoToTargetMat, setProPhotoToTargetMat] = useState(null);
-  const [targetLogSpace, setTargetLogSpace] = useState('Arri LogC3');
+  const [targetLogSpace, setTargetLogSpace] = useState('None');
   const [exportFormat, setExportFormat] = useState('tiff');
 
   const [exporting, setExporting] = useState(false);
@@ -119,6 +121,7 @@ const RawUploader = () => {
               imageState.bitDepth
           );
           setExposure(ev);
+          setInitialExposure(ev);
       }
   }, [imageState, meteringMode]);
 
@@ -149,6 +152,8 @@ const RawUploader = () => {
         setShadows(0.0);
         setWhites(0.0);
         setBlacks(0.0);
+        setSaturation(1.0);
+        setContrast(1.0);
 
         setImageState({
           data,
@@ -319,8 +324,8 @@ const RawUploader = () => {
   };
 
   const resetEnhancements = () => {
-      setContrast(1.1);
-      setSaturation(1.25);
+      setContrast(1.0);
+      setSaturation(1.0);
   };
 
   const resetTone = () => {
@@ -412,9 +417,27 @@ const RawUploader = () => {
         }}
     >
         {imageState && (
-            <div className="relative w-full h-full flex items-center justify-center">
+            <div
+                className="relative w-full h-full flex items-center justify-center select-none"
+                onPointerDown={() => setIsComparing(true)}
+                onPointerUp={() => setIsComparing(false)}
+                onPointerLeave={() => setIsComparing(false)}
+                onTouchStart={() => setIsComparing(true)}
+                onTouchEnd={() => setIsComparing(false)}
+                onTouchCancel={() => setIsComparing(false)}
+            >
+                {/* Comparison Indicator */}
+                {isComparing && (
+                    <div className="absolute top-6 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none">
+                        <div className="flex items-center gap-2 px-4 py-2 bg-black/70 backdrop-blur-md rounded-full text-white shadow-xl border border-white/20">
+                            <History size={16} className="text-primary-400" />
+                            <span className="text-sm font-medium tracking-wide">{t('actions.original')}</span>
+                        </div>
+                    </div>
+                )}
+
                 {/* Floating Action Buttons Overlay - Moved to bottom right to avoid header overlap */}
-                <div className="absolute bottom-6 right-6 z-50 flex gap-3">
+                <div className="absolute bottom-6 right-6 z-50 flex gap-3 pointer-events-auto">
                     <button
                         onClick={handleTriggerUpload}
                         className="p-3 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black/70 text-gray-700 dark:text-white rounded-full backdrop-blur-md transition-all shadow-xl border border-gray-200 dark:border-white/10 hover:scale-105 active:scale-95"
@@ -438,19 +461,19 @@ const RawUploader = () => {
                     data={imageState.data}
                     channels={imageState.channels}
                     bitDepth={imageState.bitDepth}
-                    wbMultipliers={[wbRed, wbGreen, wbBlue]}
+                    wbMultipliers={isComparing ? [1.0, 1.0, 1.0] : [wbRed, wbGreen, wbBlue]}
                     camToProPhotoMatrix={camToProPhotoMat}
-                    proPhotoToTargetMatrix={proPhotoToTargetMat}
-                    logCurveType={LOG_SPACE_CONFIG[targetLogSpace] ? LOG_SPACE_CONFIG[targetLogSpace].id : 0}
-                    exposure={exposure}
-                    saturation={saturation}
-                    contrast={contrast}
-                    highlights={highlights}
-                    shadows={shadows}
-                    whites={whites}
-                    blacks={blacks}
-                    inputGamma={inputGamma}
-                    lutData={lutData}
+                    proPhotoToTargetMatrix={isComparing ? formatMatrixForUniform(getProPhotoToTargetMatrix('None')) : proPhotoToTargetMat}
+                    logCurveType={isComparing ? LOG_SPACE_CONFIG['None'].id : (LOG_SPACE_CONFIG[targetLogSpace] ? LOG_SPACE_CONFIG[targetLogSpace].id : 0)}
+                    exposure={isComparing ? initialExposure : exposure}
+                    saturation={isComparing ? 1.0 : saturation}
+                    contrast={isComparing ? 1.0 : contrast}
+                    highlights={isComparing ? 0.0 : highlights}
+                    shadows={isComparing ? 0.0 : shadows}
+                    whites={isComparing ? 0.0 : whites}
+                    blacks={isComparing ? 0.0 : blacks}
+                    inputGamma={isComparing ? 1.0 : inputGamma}
+                    lutData={isComparing ? null : lutData}
                     lutSize={lutSize}
                 />
             </div>
