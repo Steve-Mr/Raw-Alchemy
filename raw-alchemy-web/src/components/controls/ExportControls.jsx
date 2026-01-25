@@ -7,10 +7,32 @@ const ExportControls = ({
   handleExport, exporting,
   handleBatchExport, batchExporting,
   hasMultipleImages,
-  selectedIdsCount = 0
+  selectedIdsCount = 0,
+  enterSelectionMode // Function to trigger selection mode in gallery
 }) => {
   const { t } = useTranslation();
   const [removeAfterExport, setRemoveAfterExport] = useState(false);
+
+  const onBatchClick = () => {
+      // If no items selected, enter selection mode first (or confirm "All")
+      // User request: "Click button -> Let user select -> Default All"
+      // We can trigger selection mode if count is 0.
+      if (selectedIdsCount === 0) {
+          if (enterSelectionMode) enterSelectionMode(true); // Select All inside parent? Or just enter mode.
+          // Ideally, we want to start with all selected.
+          // But parent controls selection.
+          // Let's assume handleBatchExport handles the flow if we pass a flag?
+          // Or we just repurpose this button to START selection flow if not selecting.
+          // If already selecting, it confirms.
+
+          // Simplified: The user asked for "Click -> Choose".
+          // If we are NOT in selection mode, clicking "Batch Export" should probably switch gallery to selection mode and select all.
+          // Then this button becomes "Export X Images".
+          if (enterSelectionMode) enterSelectionMode();
+      } else {
+          handleBatchExport(removeAfterExport);
+      }
+  };
 
   return (
     <div className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-800 p-5 rounded-2xl shadow-sm">
@@ -84,7 +106,7 @@ const ExportControls = ({
 
         {hasMultipleImages && (
             <button
-                onClick={() => handleBatchExport(removeAfterExport)}
+                onClick={onBatchClick}
                 disabled={exporting || batchExporting}
                 className={`w-full py-3 px-4 rounded-xl font-semibold border-2 transition-all flex items-center justify-center gap-2
                     ${exporting || batchExporting
@@ -101,7 +123,9 @@ const ExportControls = ({
                 ) : (
                     <>
                         <Layers size={18} />
-                        {selectedIdsCount > 0 ? `Export ${selectedIdsCount} Selected` : (t('export.batch') || "Export All")}
+                        {selectedIdsCount > 0
+                            ? `Export ${selectedIdsCount} Selected`
+                            : (t('export.batch') || "Batch Export...")}
                     </>
                 )}
             </button>

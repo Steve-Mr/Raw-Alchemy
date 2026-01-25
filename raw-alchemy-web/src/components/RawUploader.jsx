@@ -677,6 +677,13 @@ const RawUploader = () => {
                 batchExporting={batchExporting}
                 hasMultipleImages={images.length > 1}
                 selectedIdsCount={selectedIds.length}
+                enterSelectionMode={() => {
+                    setSelectionMode(true);
+                    // Default Select All if none selected
+                    if (selectedIds.length === 0) {
+                        setSelectedIds(images.map(img => img.id));
+                    }
+                }}
             />,
             advanced: <AdvancedControls
                 inputGamma={inputGamma} setInputGamma={setInputGamma}
@@ -685,7 +692,30 @@ const RawUploader = () => {
             />
         }}
     >
-        {imageState && activeId ? (
+        {/* Only show Splash Screen if no images are loaded */}
+        {images.length === 0 && (
+             <div className="flex-1 flex items-center justify-center h-full">
+                 {/* This container is handled by ResponsiveLayout's 'children' check,
+                     but we need to ensure we don't render the duplicate upload button inside 'children'
+                     if we have images but imageState is loading/processing.
+
+                     ResponsiveLayout logic:
+                     - If children exists: Render children (Image Viewer)
+                     - Else: Render Splash Screen (FileInput)
+
+                     So we should pass NULL as children if we have images (so Layout renders Viewer container),
+                     BUT wait, if we have images, we want the Viewer container, not the Splash.
+
+                     If we pass children, Layout renders Viewer.
+                     If we don't pass children, Layout renders Splash.
+
+                     We ALWAYS want to pass children if images.length > 0,
+                     even if imageState is null (loading).
+                 */}
+             </div>
+        )}
+
+        {images.length > 0 && (
             <div
                 className="relative w-full h-full flex items-center justify-center select-none"
                 onPointerDown={() => setIsComparing(true)}
@@ -695,6 +725,33 @@ const RawUploader = () => {
                 onTouchEnd={() => setIsComparing(false)}
                 onTouchCancel={() => setIsComparing(false)}
             >
+                {/* Canvas Content */}
+                {imageState && activeId && (
+                    <GLCanvas
+                        ref={glCanvasRef}
+                        width={imageState.width}
+                        height={imageState.height}
+                        data={imageState.data}
+                        channels={imageState.channels}
+                        bitDepth={imageState.bitDepth}
+                        wbMultipliers={isComparing ? [1.0, 1.0, 1.0] : [wbRed, wbGreen, wbBlue]}
+                        camToProPhotoMatrix={camToProPhotoMat}
+                        proPhotoToTargetMatrix={isComparing ? formatMatrixForUniform(getProPhotoToTargetMatrix('None')) : proPhotoToTargetMat}
+                        logCurveType={isComparing ? LOG_SPACE_CONFIG['None'].id : (LOG_SPACE_CONFIG[targetLogSpace] ? LOG_SPACE_CONFIG[targetLogSpace].id : 0)}
+                        exposure={isComparing ? initialExposure : exposure}
+                        saturation={isComparing ? 1.0 : saturation}
+                        contrast={isComparing ? 1.0 : contrast}
+                        highlights={isComparing ? 0.0 : highlights}
+                        shadows={isComparing ? 0.0 : shadows}
+                        whites={isComparing ? 0.0 : whites}
+                        blacks={isComparing ? 0.0 : blacks}
+                        inputGamma={isComparing ? 1.0 : inputGamma}
+                        lutData={isComparing ? null : lutData}
+                        lutSize={lutSize}
+                    />
+                )}
+
+                {/* Overlays */}
                 {isComparing && (
                     <div className="absolute top-6 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none">
                         <div className="flex items-center gap-2 px-4 py-2 bg-black/70 backdrop-blur-md rounded-full text-white shadow-xl border border-white/20">
@@ -723,31 +780,8 @@ const RawUploader = () => {
                         <XCircle size={20} />
                     </button>
                 </div>
-
-                <GLCanvas
-                    ref={glCanvasRef}
-                    width={imageState.width}
-                    height={imageState.height}
-                    data={imageState.data}
-                    channels={imageState.channels}
-                    bitDepth={imageState.bitDepth}
-                    wbMultipliers={isComparing ? [1.0, 1.0, 1.0] : [wbRed, wbGreen, wbBlue]}
-                    camToProPhotoMatrix={camToProPhotoMat}
-                    proPhotoToTargetMatrix={isComparing ? formatMatrixForUniform(getProPhotoToTargetMatrix('None')) : proPhotoToTargetMat}
-                    logCurveType={isComparing ? LOG_SPACE_CONFIG['None'].id : (LOG_SPACE_CONFIG[targetLogSpace] ? LOG_SPACE_CONFIG[targetLogSpace].id : 0)}
-                    exposure={isComparing ? initialExposure : exposure}
-                    saturation={isComparing ? 1.0 : saturation}
-                    contrast={isComparing ? 1.0 : contrast}
-                    highlights={isComparing ? 0.0 : highlights}
-                    shadows={isComparing ? 0.0 : shadows}
-                    whites={isComparing ? 0.0 : whites}
-                    blacks={isComparing ? 0.0 : blacks}
-                    inputGamma={isComparing ? 1.0 : inputGamma}
-                    lutData={isComparing ? null : lutData}
-                    lutSize={lutSize}
-                />
             </div>
-        ) : null}
+        )}
     </ResponsiveLayout>
     </>
   );

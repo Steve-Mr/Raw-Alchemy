@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, Sliders, Palette, Download, Zap, Info, Images } from 'lucide-react';
+import { Settings, Sliders, Palette, Download, Zap, Info, Images, ChevronUp, ChevronDown } from 'lucide-react';
 import ThemeToggle from '../ThemeToggle';
 import LanguageToggle from '../LanguageToggle';
 import InfoModal from '../InfoModal';
@@ -19,11 +19,13 @@ const ResponsiveLayout = ({
   const [isMobile, setIsMobile] = useState(false);
   const [isWide, setIsWide] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false); // For Drawer
 
   useEffect(() => {
     const handleResize = () => {
         setIsMobile(window.innerWidth < 1024);
         setIsWide(window.innerWidth >= 1440);
+        if (window.innerWidth >= 1440) setIsGalleryOpen(true); // Always open on wide
     };
     handleResize();
     window.addEventListener('resize', handleResize);
@@ -40,7 +42,10 @@ const ResponsiveLayout = ({
 
   const renderMobileContent = () => {
     if (activeTab === 'gallery') {
-         return gallery ? React.cloneElement(gallery, { orientation: 'vertical', className: 'h-full' }) : null;
+         return gallery ? React.cloneElement(gallery, {
+             orientation: 'vertical',
+             className: 'h-full w-full'
+         }) : null;
     }
     if (activeTab === 'color') {
         return (
@@ -252,10 +257,30 @@ const ResponsiveLayout = ({
                 )}
             </div>
 
-            {/* Standard Desktop: Bottom Gallery Strip (If NOT Wide and has images) */}
+            {/* Standard Desktop: Bottom Gallery Drawer (If NOT Wide and has images) */}
             {!isWide && children && gallery && (
-                <div className="h-32 flex-shrink-0 bg-surface-light dark:bg-surface-dark border-t border-border-light dark:border-border-dark z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] relative">
-                    {React.cloneElement(gallery, { orientation: 'horizontal', className: 'h-full w-full' })}
+                <div
+                    className={`fixed bottom-0 left-0 transition-all duration-300 z-30 bg-surface-light dark:bg-surface-dark border-t border-border-light dark:border-border-dark shadow-[0_-4px_20px_rgba(0,0,0,0.1)]
+                        ${isGalleryOpen ? 'h-48' : 'h-0 border-t-0'}
+                    `}
+                    style={{ width: 'calc(100% - 380px)' }} // Subtract right sidebar width (approx) - actually sidebar is flex, main is flex-1. We need main container width.
+                    // Better approach: Relative to main container.
+                >
+                    {/* Toggle Button */}
+                    <div className="absolute -top-8 left-1/2 transform -translate-x-1/2">
+                        <button
+                            onClick={() => setIsGalleryOpen(!isGalleryOpen)}
+                            className="flex items-center gap-2 px-4 py-1.5 bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-t-xl shadow-sm text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-primary-500 transition-colors"
+                        >
+                            {isGalleryOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                            {t('tabs.gallery')}
+                        </button>
+                    </div>
+
+                    {/* Content */}
+                    <div className="h-full w-full overflow-hidden relative">
+                         {React.cloneElement(gallery, { orientation: 'horizontal', className: 'h-full w-full' })}
+                    </div>
                 </div>
             )}
          </main>

@@ -60,8 +60,15 @@ self.onmessage = async (e) => {
       console.log("Worker: File opened successfully");
 
       // Get Metadata (Verbose for color matrices)
-      const meta = await decoder.metadata(true);
-      console.log("Worker: Metadata retrieved", meta);
+      let meta = null;
+      try {
+          meta = await decoder.metadata(true);
+          console.log("Worker: Metadata retrieved", meta);
+      } catch (metaErr) {
+          console.warn("Worker: Failed to retrieve metadata", metaErr);
+          // Create fallback meta to prevent crash
+          meta = { width: 0, height: 0, color_data: null };
+      }
 
       // Helper to flatten nested arrays
       const flattenMatrix = (mat) => {
@@ -83,26 +90,28 @@ self.onmessage = async (e) => {
       };
 
       // Extract and normalize Color Metadata from known paths
-      // 1. cam_xyz (Camera to XYZ)
-      if (meta.color_data && meta.color_data.cam_xyz) {
-          meta.cam_xyz = flattenMatrix(meta.color_data.cam_xyz);
-      }
+      if (meta) {
+          // 1. cam_xyz (Camera to XYZ)
+          if (meta.color_data && meta.color_data.cam_xyz) {
+              meta.cam_xyz = flattenMatrix(meta.color_data.cam_xyz);
+          }
 
-      // 2. rgb_cam (sRGB to Camera - usually)
-      if (meta.color_data && meta.color_data.rgb_cam) {
-          meta.rgb_cam = flattenMatrix(meta.color_data.rgb_cam);
-      }
+          // 2. rgb_cam (sRGB to Camera - usually)
+          if (meta.color_data && meta.color_data.rgb_cam) {
+              meta.rgb_cam = flattenMatrix(meta.color_data.rgb_cam);
+          }
 
-      // 3. cam_mul (White Balance)
-      if (meta.color_data && meta.color_data.cam_mul) {
-          meta.cam_mul = meta.color_data.cam_mul;
-      }
+          // 3. cam_mul (White Balance)
+          if (meta.color_data && meta.color_data.cam_mul) {
+              meta.cam_mul = meta.color_data.cam_mul;
+          }
 
-      console.log("Worker: Normalized Metadata:", {
-          cam_xyz: meta.cam_xyz,
-          rgb_cam: meta.rgb_cam,
-          cam_mul: meta.cam_mul
-      });
+          console.log("Worker: Normalized Metadata:", {
+              cam_xyz: meta.cam_xyz,
+              rgb_cam: meta.rgb_cam,
+              cam_mul: meta.cam_mul
+          });
+      }
 
       let outputData;
       let width = meta.width;
