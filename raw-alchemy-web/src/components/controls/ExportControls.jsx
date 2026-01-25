@@ -1,14 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Download, Check, Layers } from 'lucide-react';
+import { Download, Check, Layers, Trash2 } from 'lucide-react';
 
 const ExportControls = ({
   exportFormat, setExportFormat,
   handleExport, exporting,
   handleBatchExport, batchExporting,
-  hasMultipleImages
+  hasMultipleImages,
+  selectedIdsCount = 0
 }) => {
   const { t } = useTranslation();
+  const [removeAfterExport, setRemoveAfterExport] = useState(false);
 
   return (
     <div className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-800 p-5 rounded-2xl shadow-sm">
@@ -40,6 +42,22 @@ const ExportControls = ({
         </div>
       </div>
 
+      {/* Remove Option */}
+      {hasMultipleImages && (
+          <div className="mb-6 flex items-center gap-2">
+              <input
+                 type="checkbox"
+                 id="remove-after"
+                 checked={removeAfterExport}
+                 onChange={(e) => setRemoveAfterExport(e.target.checked)}
+                 className="w-4 h-4 rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+              />
+              <label htmlFor="remove-after" className="text-xs font-medium text-gray-600 dark:text-gray-300 select-none cursor-pointer">
+                  Remove images from gallery after export
+              </label>
+          </div>
+      )}
+
       <div className="space-y-3">
         <button
             onClick={handleExport}
@@ -66,7 +84,7 @@ const ExportControls = ({
 
         {hasMultipleImages && (
             <button
-                onClick={handleBatchExport}
+                onClick={() => handleBatchExport(removeAfterExport)}
                 disabled={exporting || batchExporting}
                 className={`w-full py-3 px-4 rounded-xl font-semibold border-2 transition-all flex items-center justify-center gap-2
                     ${exporting || batchExporting
@@ -83,7 +101,7 @@ const ExportControls = ({
                 ) : (
                     <>
                         <Layers size={18} />
-                        {t('export.batch') || "Export All"}
+                        {selectedIdsCount > 0 ? `Export ${selectedIdsCount} Selected` : (t('export.batch') || "Export All")}
                     </>
                 )}
             </button>

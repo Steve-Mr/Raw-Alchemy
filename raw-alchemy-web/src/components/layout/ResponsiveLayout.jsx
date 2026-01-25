@@ -176,10 +176,8 @@ const ResponsiveLayout = ({
 
       {/* Left Panel: Gallery (Only if Wide) */}
       {isWide && (
-        <div className="w-64 flex flex-col border-r border-border-light dark:border-border-dark bg-gray-50 dark:bg-black/40 z-20 transition-all">
-            <div className="p-4 border-b border-border-light dark:border-border-dark flex items-center justify-between">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-gray-500">{t('tabs.gallery') || "Gallery"}</h2>
-            </div>
+        <div className="w-80 flex-shrink-0 flex flex-col border-r border-border-light dark:border-border-dark bg-gray-50 dark:bg-black/40 z-20 transition-all">
+            {/* Header handled by GalleryPanel now */}
             <div className="flex-1 overflow-hidden relative">
                 {gallery && React.cloneElement(gallery, { orientation: 'vertical', className: 'h-full w-full' })}
             </div>
@@ -256,7 +254,7 @@ const ResponsiveLayout = ({
 
             {/* Standard Desktop: Bottom Gallery Strip (If NOT Wide and has images) */}
             {!isWide && children && gallery && (
-                <div className="h-32 bg-surface-light dark:bg-surface-dark border-t border-border-light dark:border-border-dark z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] relative">
+                <div className="h-32 flex-shrink-0 bg-surface-light dark:bg-surface-dark border-t border-border-light dark:border-border-dark z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] relative">
                     {React.cloneElement(gallery, { orientation: 'horizontal', className: 'h-full w-full' })}
                 </div>
             )}

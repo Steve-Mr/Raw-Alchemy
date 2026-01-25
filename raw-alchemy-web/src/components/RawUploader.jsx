@@ -23,6 +23,7 @@ const RawUploader = () => {
   // Gallery Hook
   const {
       images,
+      luts,
       activeId,
       loading: galleryLoading,
       error: galleryError,
@@ -30,7 +31,8 @@ const RawUploader = () => {
       removeImage,
       setActive,
       updateImage,
-      clearGallery
+      addLuts,
+      removeLut
   } = useGallery();
 
   const [loading, setLoading] = useState(false);
@@ -76,8 +78,13 @@ const RawUploader = () => {
   // Batch Export State
   const [batchExporting, setBatchExporting] = useState(false);
   const [batchQueue, setBatchQueue] = useState([]); // Array of IDs
+  const [removeAfterExport, setRemoveAfterExport] = useState(false);
   const batchDirHandle = useRef(null);
   const batchZip = useRef(null);
+
+  // Gallery Selection State
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
 
   const glCanvasRef = useRef(null);
   const workerRef = useRef(null);
@@ -255,6 +262,18 @@ const RawUploader = () => {
           mode: resultMode
         });
         setLoading(false);
+
+        // Generate Thumbnail if needed
+        setTimeout(() => {
+            if (glCanvasRef.current) {
+                 const currentImg = images.find(img => img.id === id);
+                 // Only generate if not exists or if we want to update it (optional)
+                 if (currentImg && !currentImg.thumbnail) {
+                      const thumb = glCanvasRef.current.toDataURL('image/jpeg', 0.5);
+                      updateImage(id, { thumbnail: thumb });
+                 }
+            }
+        }, 500); // Small delay to allow render
       } else if (type === 'error') {
         setError(workerError);
         setLoading(false);
@@ -316,6 +335,10 @@ const RawUploader = () => {
                       document.body.removeChild(a);
                       URL.revokeObjectURL(url);
                       setExporting(false);
+
+                      if (removeAfterExport) {
+                          removeImage(activeId);
+                      }
                   } else {
                       setError("Export failed: " + message);
                       setExporting(false);
@@ -343,20 +366,22 @@ const RawUploader = () => {
   // Batch Export Logic
   // ---------------------------------------------------------
 
-  const handleBatchExport = async () => {
-       if (images.length === 0) return;
+  const handleBatchExport = async (shouldRemove = false) => {
+       const idsToExport = selectedIds.length > 0 ? selectedIds : images.map(img => img.id);
+
+       if (idsToExport.length === 0) return;
+
+       setRemoveAfterExport(shouldRemove);
 
        let dirHandle = null;
        let zip = null;
 
-       // Try File System Access API
        try {
            if (window.showDirectoryPicker) {
                try {
                    dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
                } catch (e) {
                    if (e.name === 'AbortError') return;
-                   // Else proceed to Zip fallback
                }
            }
        } catch (e) {
@@ -364,7 +389,6 @@ const RawUploader = () => {
        }
 
        if (!dirHandle) {
-           // Fallback to JSZip
            try {
                const JSZip = (await import('jszip')).default;
                zip = new JSZip();
@@ -377,12 +401,11 @@ const RawUploader = () => {
        batchDirHandle.current = dirHandle;
        batchZip.current = zip;
 
-       setBatchQueue(images.map(img => img.id));
+       setBatchQueue(idsToExport);
        setBatchExporting(true);
 
-       // Start with first image
-       if (images.length > 0) {
-           setActive(images[0].id);
+       if (idsToExport.length > 0) {
+           setActive(idsToExport[0]);
        }
   };
 
@@ -410,7 +433,6 @@ const RawUploader = () => {
 
                const worker = new Worker(new URL('../workers/export.worker.js', import.meta.url), { type: 'module' });
 
-               // Timeout safety
                const workerTimeout = setTimeout(() => {
                    console.error("Batch export timed out for image", currentId);
                    worker.terminate();
@@ -446,6 +468,11 @@ const RawUploader = () => {
 
                        worker.terminate();
 
+                       // Remove from gallery if requested
+                       if (removeAfterExport) {
+                           removeImage(currentId);
+                       }
+
                        // Move to next
                        const nextQueue = batchQueue.slice(1);
                        setBatchQueue(nextQueue);
@@ -465,12 +492,14 @@ const RawUploader = () => {
                                URL.revokeObjectURL(a.href);
                            }
                            setBatchExporting(false);
+                           setBatchQueue([]);
                            batchDirHandle.current = null;
                            batchZip.current = null;
-                           // Optional: notify success
+                           // Reset Selection
+                           setSelectedIds([]);
+                           setSelectionMode(false);
                        }
                    } else {
-                       // On Error, try to continue
                        worker.terminate();
                        setBatchQueue(prev => prev.slice(1));
                        if (batchQueue.length > 1) setActive(batchQueue[1]);
@@ -491,7 +520,7 @@ const RawUploader = () => {
 
            processExport();
       }
-  }, [batchExporting, batchQueue, activeId, imageState, loading, exporting, setActive, exportFormat, targetLogSpace, images]);
+  }, [batchExporting, batchQueue, activeId, imageState, loading, exporting, setActive, exportFormat, targetLogSpace, images, removeAfterExport, removeImage]);
 
 
   const handleFileSelect = (e) => {
@@ -507,9 +536,16 @@ const RawUploader = () => {
       }
   };
 
-  // LUT Handlers ...
-  const handleLutSelect = (e) => {
-      const file = e.target.files[0];
+  // LUT Handlers
+  const handleLutSelect = (fileOrEvent) => {
+      // Support both file object (from library) and event (from input)
+      let file = fileOrEvent;
+      if (fileOrEvent.target && fileOrEvent.target.files) {
+          file = fileOrEvent.target.files[0];
+          // Clear input if event
+          fileOrEvent.target.value = '';
+      }
+
       if (!file) return;
 
       const reader = new FileReader();
@@ -519,6 +555,7 @@ const RawUploader = () => {
               const { size, data, title } = parseCubeLUT(text);
               setLutData(data);
               setLutSize(size);
+              // Use file name if title is missing
               setLutName(title === 'Untitled LUT' ? file.name : title);
           } catch (err) {
               console.error("LUT Parse Error:", err);
@@ -526,7 +563,6 @@ const RawUploader = () => {
           }
       };
       reader.readAsText(file);
-      e.target.value = '';
   };
 
   const handleRemoveLut = () => {
@@ -583,6 +619,10 @@ const RawUploader = () => {
         onSelect={setActive}
         onRemove={removeImage}
         onAdd={handleTriggerUpload}
+        selectionMode={selectionMode}
+        setSelectionMode={setSelectionMode}
+        selectedIds={selectedIds}
+        setSelectedIds={setSelectedIds}
       />
   );
 
@@ -636,6 +676,7 @@ const RawUploader = () => {
                 handleBatchExport={handleBatchExport}
                 batchExporting={batchExporting}
                 hasMultipleImages={images.length > 1}
+                selectedIdsCount={selectedIds.length}
             />,
             advanced: <AdvancedControls
                 inputGamma={inputGamma} setInputGamma={setInputGamma}
