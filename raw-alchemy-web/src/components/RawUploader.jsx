@@ -5,6 +5,7 @@ import GLCanvas from './GLCanvas';
 import { getProPhotoToTargetMatrix, formatMatrixForUniform, LOG_SPACE_CONFIG } from '../utils/colorMath';
 import { calculateAutoExposure } from '../utils/metering';
 import { useLutLibrary } from '../hooks/useLutLibrary';
+import { usePersistence } from '../hooks/usePersistence';
 
 // Layout & Controls
 import ResponsiveLayout from './layout/ResponsiveLayout';
@@ -24,6 +25,7 @@ const RawUploader = () => {
 
   // LUT State
   const { luts, importLuts, deleteLut } = useLutLibrary();
+  const { saveFile, saveAdjustments, loadSession, clearSession } = usePersistence();
   const [lutData, setLutData] = useState(null);
   const [lutSize, setLutSize] = useState(null);
   const [lutName, setLutName] = useState(null);
@@ -61,8 +63,52 @@ const RawUploader = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [imgStats, setImgStats] = useState(null);
 
+  const isRestoringRef = useRef(false);
+
   // Ref for the hidden file input to trigger it programmatically
   const fileInputRef = useRef(null);
+
+  // Load Session on Mount
+  useEffect(() => {
+    const checkSession = async () => {
+      // If shared target is present, skip session load (shared file takes precedence)
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('shared_target') === 'true') return;
+
+      const session = await loadSession();
+      if (session) {
+        setSelectedFile(session.file);
+        handleProcess(session.file, session.adjustments);
+      }
+    };
+    checkSession();
+  }, []);
+
+  // Save Adjustments on Change
+  useEffect(() => {
+    if (!imageState) return;
+
+    const adjustments = {
+      wbRed, wbGreen, wbBlue,
+      exposure, contrast, saturation,
+      highlights, shadows, whites, blacks,
+      meteringMode, inputGamma,
+      targetLogSpace,
+      lutData, lutSize, lutName,
+      exportFormat
+    };
+    saveAdjustments(adjustments);
+  }, [
+    wbRed, wbGreen, wbBlue,
+    exposure, contrast, saturation,
+    highlights, shadows, whites, blacks,
+    meteringMode, inputGamma,
+    targetLogSpace,
+    lutData, lutSize, lutName,
+    exportFormat,
+    imageState,
+    saveAdjustments
+  ]);
 
   useEffect(() => {
     return () => {
@@ -121,13 +167,23 @@ const RawUploader = () => {
               meteringMode,
               imageState.bitDepth
           );
-          setExposure(ev);
-          setInitialExposure(ev);
+
+          if (isRestoringRef.current) {
+             setInitialExposure(ev);
+             isRestoringRef.current = false;
+          } else {
+             setExposure(ev);
+             setInitialExposure(ev);
+          }
       }
   }, [imageState, meteringMode]);
 
-  const handleProcess = async (fileToProcess) => {
+  const handleProcess = async (fileToProcess, restoredAdjustments = null) => {
     if (!fileToProcess) return;
+
+    if (!restoredAdjustments) {
+       saveFile(fileToProcess);
+    }
 
     setLoading(true);
     setError(null);
@@ -146,15 +202,40 @@ const RawUploader = () => {
 
       if (type === 'success') {
         setMetadata(meta);
-        setWbRed(1.0);
-        setWbGreen(1.0);
-        setWbBlue(1.0);
-        setHighlights(0.0);
-        setShadows(0.0);
-        setWhites(0.0);
-        setBlacks(0.0);
-        setSaturation(1.0);
-        setContrast(1.0);
+
+        if (restoredAdjustments) {
+            isRestoringRef.current = true;
+            setWbRed(restoredAdjustments.wbRed);
+            setWbGreen(restoredAdjustments.wbGreen);
+            setWbBlue(restoredAdjustments.wbBlue);
+            setHighlights(restoredAdjustments.highlights);
+            setShadows(restoredAdjustments.shadows);
+            setWhites(restoredAdjustments.whites);
+            setBlacks(restoredAdjustments.blacks);
+            setSaturation(restoredAdjustments.saturation);
+            setContrast(restoredAdjustments.contrast);
+            setExposure(restoredAdjustments.exposure);
+            setMeteringMode(restoredAdjustments.meteringMode || 'hybrid');
+            setInputGamma(restoredAdjustments.inputGamma || 1.0);
+            setTargetLogSpace(restoredAdjustments.targetLogSpace || 'None');
+            setExportFormat(restoredAdjustments.exportFormat || 'tiff');
+
+            if (restoredAdjustments.lutData) {
+                setLutData(restoredAdjustments.lutData);
+                setLutSize(restoredAdjustments.lutSize);
+                setLutName(restoredAdjustments.lutName);
+            }
+        } else {
+            setWbRed(1.0);
+            setWbGreen(1.0);
+            setWbBlue(1.0);
+            setHighlights(0.0);
+            setShadows(0.0);
+            setWhites(0.0);
+            setBlacks(0.0);
+            setSaturation(1.0);
+            setContrast(1.0);
+        }
 
         setImageState({
           data,
@@ -168,6 +249,7 @@ const RawUploader = () => {
       } else if (type === 'error') {
         setError(workerError);
         setLoading(false);
+        if (!restoredAdjustments) clearSession();
       }
     };
 
@@ -175,6 +257,7 @@ const RawUploader = () => {
         console.error("Worker Crash:", err);
         setError("Worker failed (Check console). The operation might have crashed.");
         setLoading(false);
+        if (!restoredAdjustments) clearSession();
     };
 
     try {
@@ -189,6 +272,7 @@ const RawUploader = () => {
     } catch (err) {
       setError("Failed to read file: " + err.message);
       setLoading(false);
+      if (!restoredAdjustments) clearSession();
     }
   };
 
@@ -268,6 +352,7 @@ const RawUploader = () => {
       // Reset critical pipeline state
       setLutData(null);
       setLutName(null);
+      clearSession();
       // Reset file input value so same file can be selected again
       if (fileInputRef.current) fileInputRef.current.value = '';
   };
