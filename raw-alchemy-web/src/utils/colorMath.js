@@ -37,12 +37,19 @@ export const LOG_CURVE_IDS = {
     CANON_LOG3: 6,
     N_LOG: 7,
     D_LOG: 8,
-    LOG3G10: 9
+    LOG3G10: 9,
+    NONE: 10
 };
 
 // Target Gamut Matrices: ProPhoto RGB (D50) -> Target Gamut (Usually D65)
 // Extracted from colour-science
 export const GAMUT_MATRICES = {
+    // sRGB / Rec.709 (Display)
+    'None': [
+        1.345943, -0.255608, -0.051112,
+        -0.544599, 1.508167, 0.020535,
+        0.000000, 0.000000, 1.211813
+    ],
     // ARRI Wide Gamut 3
     'Arri LogC3': [
         1.221468, -0.140818, -0.080781,
@@ -131,6 +138,7 @@ export const LOG_SPACE_CONFIG = {
     'N-Log': { id: LOG_CURVE_IDS.N_LOG },
     'D-Log': { id: LOG_CURVE_IDS.D_LOG },
     'Log3G10': { id: LOG_CURVE_IDS.LOG3G10 },
+    'None': { id: LOG_CURVE_IDS.NONE },
 };
 
 export const getProPhotoToTargetMatrix = (logSpaceName) => {

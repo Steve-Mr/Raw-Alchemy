@@ -398,6 +398,12 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
           return a * log10(x_off * b + 1.0);
       }
 
+      // 10. None (sRGB)
+      float srgb_transfer(float x) {
+          if (x <= 0.0031308) return 12.92 * x;
+          return 1.055 * pow(x, 1.0/2.4) - 0.055;
+      }
+
       vec3 applyLogCurve(vec3 linearColor, int curveType) {
           vec3 res;
           if (curveType == 0) { // Arri LogC3
@@ -440,6 +446,10 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
              res.r = log3G10(linearColor.r);
              res.g = log3G10(linearColor.g);
              res.b = log3G10(linearColor.b);
+          } else if (curveType == 10) { // None (sRGB)
+             res.r = srgb_transfer(linearColor.r);
+             res.g = srgb_transfer(linearColor.g);
+             res.b = srgb_transfer(linearColor.b);
           } else {
              // Fallback to LogC3
              res.r = logC3_EI800(linearColor.r);
