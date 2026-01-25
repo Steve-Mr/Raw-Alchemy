@@ -4,7 +4,7 @@ import { openDB } from 'idb';
 import GLCanvas from './GLCanvas';
 import { getProPhotoToTargetMatrix, formatMatrixForUniform, LOG_SPACE_CONFIG } from '../utils/colorMath';
 import { calculateAutoExposure } from '../utils/metering';
-import { parseCubeLUT } from '../utils/lutParser';
+import { useLutLibrary } from '../hooks/useLutLibrary';
 
 // Layout & Controls
 import ResponsiveLayout from './layout/ResponsiveLayout';
@@ -23,6 +23,7 @@ const RawUploader = () => {
   const [metadata, setMetadata] = useState(null);
 
   // LUT State
+  const { luts, importLuts, deleteLut } = useLutLibrary();
   const [lutData, setLutData] = useState(null);
   const [lutSize, setLutSize] = useState(null);
   const [lutName, setLutName] = useState(null);
@@ -277,25 +278,11 @@ const RawUploader = () => {
       }
   };
 
-  const handleLutSelect = (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = (event) => {
-          try {
-              const text = event.target.result;
-              const { size, data, title } = parseCubeLUT(text);
-              setLutData(data);
-              setLutSize(size);
-              setLutName(title === 'Untitled LUT' ? file.name : title);
-          } catch (err) {
-              console.error("LUT Parse Error:", err);
-              setError("Failed to load LUT: " + err.message);
-          }
-      };
-      reader.readAsText(file);
-      e.target.value = '';
+  const handleApplyLut = (lut) => {
+      if (!lut) return;
+      setLutData(lut.data);
+      setLutSize(lut.size);
+      setLutName(lut.name);
   };
 
   const handleRemoveLut = () => {
@@ -403,7 +390,12 @@ const RawUploader = () => {
             />,
             color: <ColorControls
                 targetLogSpace={targetLogSpace} setTargetLogSpace={setTargetLogSpace}
-                lutName={lutName} onLutSelect={handleLutSelect} onRemoveLut={handleRemoveLut}
+                lutName={lutName}
+                onRemoveLut={handleRemoveLut}
+                luts={luts}
+                onImportLuts={importLuts}
+                onDeleteLut={deleteLut}
+                onApplyLut={handleApplyLut}
             />,
             export: <ExportControls
                 exportFormat={exportFormat} setExportFormat={setExportFormat}
