@@ -106,7 +106,7 @@ const ColorControls = ({
                                         </span>
                                         <button
                                             onClick={(e) => handleDelete(e, lut.id)}
-                                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                            className="p-1.5 text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
                                             title="Delete LUT"
                                         >
                                             <Trash2 size={14} />
