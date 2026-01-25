@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, Sliders, Palette, Download, Zap, Info } from 'lucide-react';
+import { Settings, Sliders, Palette, Download, Info, Image as ImageIcon, ChevronRight } from 'lucide-react';
 import ThemeToggle from '../ThemeToggle';
 import LanguageToggle from '../LanguageToggle';
 import InfoModal from '../InfoModal';
 
 const ResponsiveLayout = ({
   children, // The Image Component
-  controls, // { basic, tone, color, export, advanced }
-  fileInput,
+  controls, // { basic, tone, color, export }
+  gallerySidebar, // The Gallery Component
   loading,
   error
 }) => {
@@ -17,6 +17,7 @@ const ResponsiveLayout = ({
   const [activeTab, setActiveTab] = useState('basic');
   const [isMobile, setIsMobile] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [isGalleryCollapsed, setIsGalleryCollapsed] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -25,16 +26,17 @@ const ResponsiveLayout = ({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Update tabs for mobile: Add Gallery, Remove Advanced (merged into Color)
   const tabs = [
+    { id: 'gallery', label: t('gallery', 'Gallery'), icon: ImageIcon },
     { id: 'basic', label: t('tabs.basic'), icon: Settings },
     { id: 'tone', label: t('tabs.tone'), icon: Sliders },
     { id: 'color', label: t('tabs.color'), icon: Palette },
     { id: 'export', label: t('tabs.export'), icon: Download },
-    // Advanced is now a first-class citizen in mobile tabs
-    { id: 'advanced', label: t('tabs.advanced'), icon: Zap },
   ];
 
   const renderContent = () => {
+    if (activeTab === 'gallery') return gallerySidebar; // For mobile
     return controls[activeTab] || null;
   };
 
@@ -42,7 +44,6 @@ const ResponsiveLayout = ({
 
   if (isMobile) {
     // MOBILE: Bottom Navigation Layout
-    // Use h-[100dvh] to handle mobile browser address bars correctly
     return (
       <div className="flex flex-col h-[100dvh] w-screen overflow-hidden bg-surface-light dark:bg-surface-dark text-gray-900 dark:text-gray-100">
         <InfoModal isOpen={showInfo} onClose={() => setShowInfo(false)} />
@@ -84,21 +85,14 @@ const ResponsiveLayout = ({
                 </div>
             )}
 
-            {!children ? (
-                <div className="w-full px-6">
-                     {fileInput}
-                </div>
-            ) : (
-                <div className="w-full h-full p-2">
-                     {children}
-                </div>
-            )}
+            <div className="w-full h-full p-2">
+                 {children}
+            </div>
         </div>
 
         {/* Middle: Controls Content (Scrollable) */}
-        {/* We use a fixed height container or flex basis to ensure it doesn't push the nav bar off screen */}
         <div className="h-[45vh] bg-surface-light dark:bg-surface-dark flex flex-col border-t border-border-light dark:border-border-dark relative z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.1)]">
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-5">
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-0"> {/* Removed padding to fit gallery nicely */}
                 <AnimatePresence mode="wait">
                     <motion.div
                         key={activeTab}
@@ -106,8 +100,18 @@ const ResponsiveLayout = ({
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
                         transition={{ duration: 0.15 }}
+                        className="h-full"
                     >
-                         {renderContent()}
+                         {activeTab === 'gallery' ? (
+                            // Render Gallery Sidebar in mobile mode (custom styling potentially needed)
+                            <div className="h-full overflow-hidden">
+                                {React.cloneElement(gallerySidebar, { isMobile: true })}
+                            </div>
+                         ) : (
+                            <div className="p-5">
+                                {renderContent()}
+                            </div>
+                         )}
                     </motion.div>
                 </AnimatePresence>
             </div>
@@ -149,13 +153,33 @@ const ResponsiveLayout = ({
     );
   }
 
-  // DESKTOP LAYOUT (Sidebar)
+  // DESKTOP LAYOUT (3-Column)
   return (
     <div className="flex h-screen w-screen bg-surface-light dark:bg-surface-dark text-gray-900 dark:text-gray-100 overflow-hidden font-sans">
       <InfoModal isOpen={showInfo} onClose={() => setShowInfo(false)} />
 
-      {/* Left Panel: Image Viewer */}
+      {/* LEFT PANEL: GALLERY */}
+      {/* We use React.cloneElement or pass props if we want to control collapse state from here,
+          but GallerySidebar already accepts isCollapsed props.
+          We need to ensure the width transitions correctly.
+      */}
+      <div className="shrink-0 h-full z-30 shadow-xl">
+         {React.cloneElement(gallerySidebar, {
+             isCollapsed: isGalleryCollapsed,
+             setIsCollapsed: setIsGalleryCollapsed
+         })}
+      </div>
+
+      {/* MIDDLE PANEL: CANVAS */}
       <div className="flex-1 flex flex-col bg-gray-100 dark:bg-black/95 relative overflow-hidden transition-colors duration-300">
+         {isGalleryCollapsed && (
+             <button
+                 onClick={() => setIsGalleryCollapsed(false)}
+                 className="absolute top-1/2 left-0 transform -translate-y-1/2 z-40 p-2 bg-white dark:bg-zinc-900 rounded-r-xl shadow-md border border-l-0 border-gray-200 dark:border-gray-800 text-gray-500 hover:text-primary-500 transition-colors"
+             >
+                 <ChevronRight size={20} />
+             </button>
+         )}
          <header className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-10 pointer-events-none">
             <h1 className="text-sm font-bold text-gray-900 dark:text-white pointer-events-auto backdrop-blur-md bg-white/50 dark:bg-black/50 px-4 py-2 rounded-full border border-gray-200 dark:border-white/10 shadow-sm transition-colors">
                 {t('appTitle')}
@@ -205,25 +229,24 @@ const ResponsiveLayout = ({
                     transition={{ duration: 0.5 }}
                     className="flex flex-col items-center justify-center max-w-md w-full"
                 >
-                    <div className="bg-surface-light/95 dark:bg-gray-900/50 p-12 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800 text-center backdrop-blur-sm">
+                    <div className="bg-surface-light/95 dark:bg-gray-900/50 p-12 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800 text-center backdrop-blur-sm opacity-50">
                         <div className="mb-6 flex justify-center text-gray-300 dark:text-gray-600">
                             <Palette size={64} strokeWidth={1} />
                         </div>
-                        <h2 className="text-3xl font-bold mb-3 tracking-tighter text-gray-900 dark:text-white">
-                            {t('appTitle')}
+                        <h2 className="text-2xl font-bold mb-2 tracking-tighter text-gray-900 dark:text-white">
+                            Select an Image
                         </h2>
-                        <p className="text-sm font-bold text-blue-600 dark:text-blue-400 uppercase tracking-[0.2em] mb-10">
-                            {t('slogan')}
+                        <p className="text-sm text-gray-500">
+                            Choose an image from the gallery to start editing.
                         </p>
-                        {fileInput}
                     </div>
                 </motion.div>
             )}
          </main>
       </div>
 
-      {/* Right Panel: Controls Sidebar */}
-      <div className="w-[380px] xl:w-[420px] flex flex-col border-l border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark z-20 shadow-2xl">
+      {/* RIGHT PANEL: CONTROLS */}
+      <div className="w-[380px] xl:w-[420px] flex flex-col border-l border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark z-20 shadow-2xl shrink-0">
          <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
             {children ? (
                 <div className="space-y-8">
@@ -231,20 +254,14 @@ const ResponsiveLayout = ({
                     <section>{controls.tone}</section>
                     <section>{controls.color}</section>
                     <section>{controls.export}</section>
-                    <section>{controls.advanced}</section>
+                    {/* Advanced is now inside Color */}
                 </div>
             ) : (
                 <div className="h-full flex flex-col items-center justify-center text-gray-300 dark:text-gray-700 space-y-4 opacity-50">
                     <Sliders size={48} strokeWidth={1} />
-                    <p className="text-sm font-medium">Load an image to access controls</p>
+                    <p className="text-sm font-medium">Controls disabled</p>
                 </div>
             )}
-         </div>
-
-         <div className="p-4 border-t border-border-light dark:border-border-dark text-center">
-             <p className="text-[10px] text-gray-400 font-medium tracking-wide uppercase">
-                 {t('appTitle')} &copy; {new Date().getFullYear()}
-             </p>
          </div>
       </div>
     </div>

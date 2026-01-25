@@ -1,17 +1,28 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LOG_SPACE_CONFIG } from '../../utils/colorMath';
-import { Palette, Upload, X } from 'lucide-react';
+import { Palette, Upload, X, Zap, Activity, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
+import PrecisionSlider from './PrecisionSlider';
 
 const ColorControls = ({
+  // Color Props
   targetLogSpace, setTargetLogSpace,
-  lutName, onLutSelect, onRemoveLut
+  luts, selectedLutId, onSelectLut, onImportLut, onRemoveLutFromLibrary,
+
+  // Advanced Props (Merged)
+  inputGamma, setInputGamma,
+  handleAnalyze, imgStats,
+  onResetAdvanced
 }) => {
   const { t } = useTranslation();
   const fileInputRef = useRef(null);
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
 
-  const handleFileClick = () => {
-    fileInputRef.current?.click();
+  const handleFileSelect = (e) => {
+    if(e.target.files && e.target.files[0]) {
+        onImportLut(e.target.files[0]);
+    }
+    e.target.value = '';
   };
 
   return (
@@ -23,7 +34,7 @@ const ColorControls = ({
             {t('color.targetSpace')}
         </h3>
         <select
-            className="block w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-primary-light focus:border-primary-light text-gray-900 dark:text-white appearance-none"
+            className="block w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-primary-light focus:border-primary-light text-gray-900 dark:text-white appearance-none outline-none"
             value={targetLogSpace}
             onChange={(e) => setTargetLogSpace(e.target.value)}
         >
@@ -35,52 +46,122 @@ const ColorControls = ({
         </select>
       </div>
 
-      {/* 3D LUT */}
+      {/* 3D LUT Library */}
       <div className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-800 p-5 rounded-2xl shadow-sm">
-        <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
-            {t('color.lut')}
-        </h3>
-
-        {lutName ? (
-            <div className="flex items-center justify-between bg-blue-50/50 dark:bg-blue-900/20 p-3 rounded-xl border border-blue-100 dark:border-blue-800">
-                <div className="flex items-center gap-3 overflow-hidden">
-                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400 text-xs">✓</span>
-                    <div className="truncate text-sm font-medium text-blue-900 dark:text-blue-100" title={lutName}>
-                        {lutName}
-                    </div>
-                </div>
-                <button
-                    onClick={onRemoveLut}
-                    className="text-gray-400 hover:text-red-500 transition-colors p-2"
-                >
-                    <X size={16} />
-                </button>
-            </div>
-        ) : (
-            <div
-                onClick={handleFileClick}
-                className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:border-gray-300 dark:hover:border-gray-600 transition-all group"
+        <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                {t('color.lut')}
+            </h3>
+            <button
+                onClick={() => fileInputRef.current?.click()}
+                className="text-primary-600 dark:text-primary-400 text-xs font-medium flex items-center gap-1 hover:underline"
             >
-                <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-full mb-3 group-hover:scale-110 transition-transform">
-                    <Upload size={20} className="text-gray-400" />
+                <Upload size={12} />
+                {t('color.loadLut')}
+            </button>
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept=".cube"
+                className="hidden"
+                onChange={handleFileSelect}
+            />
+        </div>
+
+        <div className="space-y-3">
+             <select
+                className="block w-full p-3 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-primary-light focus:border-primary-light text-gray-900 dark:text-white appearance-none outline-none"
+                value={selectedLutId || ''}
+                onChange={(e) => onSelectLut(e.target.value || null)}
+            >
+                <option value="">{t('color.noLut', 'No LUT')}</option>
+                {luts && luts.map((lut) => (
+                    <option key={lut.id} value={lut.id}>
+                        {lut.name}
+                    </option>
+                ))}
+            </select>
+
+            {selectedLutId && (
+                <div className="flex justify-end">
+                    <button
+                        onClick={() => onRemoveLutFromLibrary(selectedLutId)}
+                        className="text-xs text-red-500 hover:text-red-600 flex items-center gap-1 opacity-80 hover:opacity-100"
+                    >
+                        <X size={12} />
+                        {t('color.removeLut', 'Remove from Library')}
+                    </button>
                 </div>
-                <span className="text-sm text-gray-600 dark:text-gray-300 font-medium">
-                    {t('color.loadLut')}
-                </span>
-                <input
-                    ref={fileInputRef}
-                    id="lut-upload-input"
-                    name="lut_upload"
-                    type="file"
-                    accept=".cube"
-                    onChange={onLutSelect}
-                    className="hidden"
-                />
-            </div>
-        )}
+            )}
+        </div>
         <p className="text-[10px] text-gray-400 mt-3 text-center">
             {t('color.lutNote')}
         </p>
+      </div>
+
+      {/* Advanced Controls (Collapsible) */}
+      <div className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-800 rounded-2xl shadow-sm overflow-hidden">
+         <button
+            onClick={() => setIsAdvancedOpen(!isAdvancedOpen)}
+            className="w-full flex items-center justify-between p-5 bg-gray-50 dark:bg-zinc-900/50 hover:bg-gray-100 dark:hover:bg-zinc-900 transition-colors"
+         >
+             <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                <Zap size={14} className={isAdvancedOpen ? "text-yellow-500" : ""} />
+                {t('tabs.advanced')}
+             </h3>
+             {isAdvancedOpen ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+         </button>
+
+         {isAdvancedOpen && (
+             <div className="p-5 border-t border-gray-200 dark:border-gray-800 space-y-6 animate-in slide-in-from-top-2 duration-200">
+                 {/* Input Linearization */}
+                 <div>
+                    <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{t('advanced.inputLinearizationNote')}</span>
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-gray-700 dark:text-gray-300">
+                                {inputGamma.toFixed(1)}
+                            </span>
+                             <button
+                                onClick={onResetAdvanced}
+                                className="text-gray-400 hover:text-primary-light dark:hover:text-primary-dark transition-colors"
+                                title={t('actions.reset')}
+                            >
+                                <RotateCcw size={12} />
+                            </button>
+                        </div>
+                    </div>
+                    <PrecisionSlider
+                        value={inputGamma}
+                        onChange={setInputGamma}
+                        min={1.0} max={3.0} step={0.1}
+                    />
+                 </div>
+
+                 {/* Image Verification */}
+                 <div>
+                    <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <Activity size={12} className="text-indigo-500" />
+                        {t('advanced.imageVerification')}
+                    </h4>
+                    <button
+                        onClick={handleAnalyze}
+                        className="w-full py-2.5 px-4 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs font-bold rounded-xl transition-colors border border-gray-200 dark:border-gray-700"
+                    >
+                        {t('advanced.analyze')}
+                    </button>
+                    {imgStats && (
+                        <div className="mt-3 text-[10px] font-mono bg-gray-50 dark:bg-black/30 p-3 rounded-lg border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400">
+                            <div className="grid grid-cols-2 gap-y-1 gap-x-4">
+                                <div className="flex justify-between"><span>{t('advanced.min')}:</span> <span className="text-gray-900 dark:text-gray-200">{imgStats.min.toFixed(5)}</span></div>
+                                <div className="flex justify-between"><span>{t('advanced.max')}:</span> <span className="text-gray-900 dark:text-gray-200">{imgStats.max.toFixed(5)}</span></div>
+                                <div className="flex justify-between col-span-2 border-t border-gray-200 dark:border-gray-800 pt-1 mt-1"><span>{t('advanced.mean')}:</span> <span className="text-gray-900 dark:text-gray-200">{imgStats.mean.toFixed(5)}</span></div>
+                            </div>
+                        </div>
+                    )}
+                 </div>
+             </div>
+         )}
       </div>
     </div>
   );
