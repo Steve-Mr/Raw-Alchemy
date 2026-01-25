@@ -9,6 +9,7 @@
   "exportingSub": "Please wait.",
   "error": "Error",
   "tabs": {
+    "gallery": "Gallery",
     "basic": "Basic",
     "tone": "Grading",
     "color": "Color",
@@ -49,7 +50,9 @@
   "export": {
     "format": "Format",
     "button": "Save Image",
-    "encoding": "Processing..."
+    "encoding": "Processing...",
+    "batch": "Export All",
+    "batchProcessing": "Processing Batch..."
   },
   "advanced": {
     "title": "Advanced",
@@ -69,6 +72,8 @@
     "bufferSize": "Size"
   },
   "actions": {
+    "add": "Add",
+    "addImages": "Add Images",
     "remove": "Remove Image",
     "replace": "Replace",
     "reset": "Reset",

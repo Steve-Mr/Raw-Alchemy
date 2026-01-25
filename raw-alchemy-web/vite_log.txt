@@ -1,0 +1,22 @@
+
+> nitrate-grain@0.0.0 dev
+> vite --port 5174
+
+
+  VITE v7.3.1  ready in 752 ms
+
+  ➜  Local:   http://localhost:5174/
+  ➜  Network: use --host to expose
+3:46:16 AM [vite] (client) ✨ new dependencies optimized: workbox-precaching, workbox-core, workbox-routing
+3:46:16 AM [vite] (client) ✨ optimized dependencies changed. reloading
+3:46:16 AM [vite] (client) hmr update /src/index.css
+3:47:31 AM [vite] (client) page reload src/locales/en.json
+3:47:31 AM [vite] (client) hmr update /src/index.css
+3:47:32 AM [vite] (client) page reload src/locales/zh.json
+3:47:32 AM [vite] (client) hmr update /src/index.css
+3:50:20 AM [vite] (client) hmr update /src/components/RawUploader.jsx, /src/index.css
+3:50:20 AM [vite] (client) hmr update /src/index.css
+3:50:21 AM [vite] (client) hmr update /src/components/RawUploader.jsx, /src/index.css
+3:50:21 AM [vite] (client) hmr update /src/index.css
+3:50:31 AM [vite] (client) hmr update /src/components/RawUploader.jsx, /src/index.css
+3:50:31 AM [vite] (client) hmr update /src/index.css

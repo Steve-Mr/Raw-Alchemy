@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { openDB } from 'idb';
 import GLCanvas from './GLCanvas';
 import { getProPhotoToTargetMatrix, formatMatrixForUniform, LOG_SPACE_CONFIG } from '../utils/colorMath';
 import { calculateAutoExposure } from '../utils/metering';
 import { parseCubeLUT } from '../utils/lutParser';
+import { useGallery } from '../hooks/useGallery';
 
 // Layout & Controls
 import ResponsiveLayout from './layout/ResponsiveLayout';
+import GalleryPanel from './gallery/GalleryPanel';
 import BasicControls from './controls/BasicControls';
 import ToneControls from './controls/ToneControls';
 import ColorControls from './controls/ColorControls';
@@ -17,9 +19,25 @@ import { UploadCloud, XCircle, RefreshCw, History } from 'lucide-react';
 
 const RawUploader = () => {
   const { t } = useTranslation();
+
+  // Gallery Hook
+  const {
+      images,
+      activeId,
+      loading: galleryLoading,
+      error: galleryError,
+      addImages,
+      removeImage,
+      setActive,
+      updateImage,
+      clearGallery
+  } = useGallery();
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [imageState, setImageState] = useState(null);
+
+  // Current Processed State (Decoded RGB data)
+  const [imageState, setImageState] = useState(null); // { id, data, width, height... }
   const [metadata, setMetadata] = useState(null);
 
   // LUT State
@@ -54,14 +72,23 @@ const RawUploader = () => {
   const [exportFormat, setExportFormat] = useState('tiff');
 
   const [exporting, setExporting] = useState(false);
+
+  // Batch Export State
+  const [batchExporting, setBatchExporting] = useState(false);
+  const [batchQueue, setBatchQueue] = useState([]); // Array of IDs
+  const batchDirHandle = useRef(null);
+  const batchZip = useRef(null);
+
   const glCanvasRef = useRef(null);
   const workerRef = useRef(null);
   const exportWorkerRef = useRef(null);
-  const [selectedFile, setSelectedFile] = useState(null);
   const [imgStats, setImgStats] = useState(null);
 
   // Ref for the hidden file input to trigger it programmatically
   const fileInputRef = useRef(null);
+
+  // Ref to track synchronization to avoid loops
+  const lastLoadedId = useRef(null);
 
   useEffect(() => {
     return () => {
@@ -70,8 +97,8 @@ const RawUploader = () => {
     };
   }, []);
 
+  // Handle Shared Files (PWA)
   useEffect(() => {
-    // Check for shared target query param
     const checkSharedFile = async () => {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('shared_target') === 'true') {
@@ -79,18 +106,15 @@ const RawUploader = () => {
                 const db = await openDB('nitrate-grain-share', 1);
                 const file = await db.get('shared-files', 'latest-share');
 
-                if (file) {
-                    // Check if file is valid
-                    if (file instanceof Blob) {
-                        setSelectedFile(file);
-                        handleProcess(file);
-                    }
-
-                    // Clean up
-                    await db.delete('shared-files', 'latest-share');
+                if (file && file instanceof Blob) {
+                     // Append shared file to gallery
+                     const added = await addImages([file]);
+                     if (added && added.length > 0) {
+                         setActive(added[0].id);
+                     }
                 }
 
-                // Clean URL
+                await db.delete('shared-files', 'latest-share');
                 const newUrl = window.location.pathname;
                 window.history.replaceState({}, document.title, newUrl);
             } catch (err) {
@@ -100,8 +124,9 @@ const RawUploader = () => {
     };
 
     checkSharedFile();
-  }, []);
+  }, [addImages]);
 
+  // Sync Color Matrices
   useEffect(() => {
       if (metadata) {
           const c2p = [1,0,0, 0,1,0, 0,0,1];
@@ -111,6 +136,7 @@ const RawUploader = () => {
       }
   }, [metadata, targetLogSpace]);
 
+  // Auto Exposure (Only on initial load/change of metering)
   useEffect(() => {
       if (imageState && imageState.mode === 'rgb' && imageState.data) {
           const ev = calculateAutoExposure(
@@ -120,22 +146,96 @@ const RawUploader = () => {
               meteringMode,
               imageState.bitDepth
           );
-          setExposure(ev);
           setInitialExposure(ev);
+
+          if (exposure === 0.0 && lastLoadedId.current === imageState.id) {
+               if (exposure === 0.0) setExposure(ev);
+          }
       }
   }, [imageState, meteringMode]);
 
-  const handleProcess = async (fileToProcess) => {
+  // ---------------------------------------------------------
+  // Gallery Synchronization
+  // ---------------------------------------------------------
+
+  // 1. Load Image & Settings when Active ID Changes
+  useEffect(() => {
+      if (galleryLoading) return;
+
+      if (!activeId) {
+          setImageState(null);
+          setMetadata(null);
+          lastLoadedId.current = null;
+          return;
+      }
+
+      if (activeId === lastLoadedId.current) return;
+
+      const img = images.find(i => i.id === activeId);
+      if (!img) return;
+
+      lastLoadedId.current = activeId;
+      setError(null);
+
+      // Restore Settings
+      const s = img.settings || {};
+      setWbRed(s.wbRed ?? 1.0);
+      setWbGreen(s.wbGreen ?? 1.0);
+      setWbBlue(s.wbBlue ?? 1.0);
+      setExposure(s.exposure ?? 0.0);
+      setContrast(s.contrast ?? 1.0);
+      setSaturation(s.saturation ?? 1.0);
+      setHighlights(s.highlights ?? 0.0);
+      setShadows(s.shadows ?? 0.0);
+      setWhites(s.whites ?? 0.0);
+      setBlacks(s.blacks ?? 0.0);
+      setMeteringMode(s.meteringMode ?? 'hybrid');
+      setInputGamma(s.inputGamma ?? 1.0);
+      setTargetLogSpace(s.targetLogSpace ?? 'None');
+      setLutData(null);
+      setLutName(null);
+      setLutSize(null);
+
+      // Process (Decode)
+      handleProcess(img.file, activeId);
+
+  }, [activeId, images, galleryLoading]);
+
+  // 2. Save Settings to Gallery when they change (Debounced)
+  useEffect(() => {
+      if (!activeId || galleryLoading) return;
+
+      const timer = setTimeout(() => {
+          updateImage(activeId, {
+              settings: {
+                  wbRed, wbGreen, wbBlue,
+                  exposure, contrast, saturation,
+                  highlights, shadows, whites, blacks,
+                  meteringMode, inputGamma,
+                  targetLogSpace
+              }
+          });
+      }, 500);
+
+      return () => clearTimeout(timer);
+  }, [
+      activeId, galleryLoading, updateImage,
+      wbRed, wbGreen, wbBlue, exposure, contrast, saturation,
+      highlights, shadows, whites, blacks, meteringMode, inputGamma, targetLogSpace
+  ]);
+
+
+  // ---------------------------------------------------------
+  // Processing Logic
+  // ---------------------------------------------------------
+
+  const handleProcess = async (fileToProcess, id) => {
     if (!fileToProcess) return;
 
     setLoading(true);
-    setError(null);
-    setImageState(null);
-    setMetadata(null);
 
     if (workerRef.current) {
         workerRef.current.terminate();
-        workerRef.current = null;
     }
 
     workerRef.current = new Worker(new URL('../workers/raw.worker.js', import.meta.url), { type: 'module' });
@@ -145,17 +245,8 @@ const RawUploader = () => {
 
       if (type === 'success') {
         setMetadata(meta);
-        setWbRed(1.0);
-        setWbGreen(1.0);
-        setWbBlue(1.0);
-        setHighlights(0.0);
-        setShadows(0.0);
-        setWhites(0.0);
-        setBlacks(0.0);
-        setSaturation(1.0);
-        setContrast(1.0);
-
         setImageState({
+          id, // Tag with ID
           data,
           width,
           height,
@@ -172,7 +263,7 @@ const RawUploader = () => {
 
     workerRef.current.onerror = (err) => {
         console.error("Worker Crash:", err);
-        setError("Worker failed (Check console). The operation might have crashed.");
+        setError("Worker failed. Try reloading.");
         setLoading(false);
     };
 
@@ -192,6 +283,7 @@ const RawUploader = () => {
   };
 
   const handleExport = () => {
+      // Single Image Export
       if (!imageState || !glCanvasRef.current) return;
       setExporting(true);
       setTimeout(async () => {
@@ -201,9 +293,10 @@ const RawUploader = () => {
 
               const { width, height, data } = result;
 
-              if (exportWorkerRef.current) {
-                  exportWorkerRef.current.terminate();
-              }
+              const currentImg = images.find(i => i.id === activeId);
+              const originalName = currentImg ? currentImg.name.split('.').slice(0, -1).join('.') : 'output';
+
+              if (exportWorkerRef.current) exportWorkerRef.current.terminate();
               exportWorkerRef.current = new Worker(new URL('../workers/export.worker.js', import.meta.url), { type: 'module' });
 
               exportWorkerRef.current.onmessage = (e) => {
@@ -214,7 +307,7 @@ const RawUploader = () => {
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement('a');
                       a.href = url;
-                      const originalName = selectedFile ? selectedFile.name.split('.').slice(0, -1).join('.') : 'output';
+
                       const cleanLogName = targetLogSpace.replace(/\s+/g, '-');
                       const ext = exportFormat === 'tiff' ? 'tiff' : exportFormat === 'jpeg' ? 'jpg' : exportFormat;
                       a.download = `${originalName}_${cleanLogName}.${ext}`;
@@ -229,12 +322,6 @@ const RawUploader = () => {
                   }
               };
 
-              exportWorkerRef.current.onerror = (err) => {
-                  console.error("Export Worker Error:", err);
-                  setError("Export Worker crashed.");
-                  setExporting(false);
-              };
-
               exportWorkerRef.current.postMessage({
                   width,
                   height,
@@ -246,29 +333,172 @@ const RawUploader = () => {
               }, [data.buffer]);
 
           } catch (err) {
-              console.error(err);
               setError("Export Error: " + err.message);
               setExporting(false);
           }
       }, 100);
   };
 
-  const handleFileSelect = (e) => {
-    if (e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
-      handleProcess(e.target.files[0]);
-    }
+  // ---------------------------------------------------------
+  // Batch Export Logic
+  // ---------------------------------------------------------
+
+  const handleBatchExport = async () => {
+       if (images.length === 0) return;
+
+       let dirHandle = null;
+       let zip = null;
+
+       // Try File System Access API
+       try {
+           if (window.showDirectoryPicker) {
+               try {
+                   dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+               } catch (e) {
+                   if (e.name === 'AbortError') return;
+                   // Else proceed to Zip fallback
+               }
+           }
+       } catch (e) {
+           console.warn("FSA API not supported", e);
+       }
+
+       if (!dirHandle) {
+           // Fallback to JSZip
+           try {
+               const JSZip = (await import('jszip')).default;
+               zip = new JSZip();
+           } catch (e) {
+               setError("Failed to load JSZip: " + e.message);
+               return;
+           }
+       }
+
+       batchDirHandle.current = dirHandle;
+       batchZip.current = zip;
+
+       setBatchQueue(images.map(img => img.id));
+       setBatchExporting(true);
+
+       // Start with first image
+       if (images.length > 0) {
+           setActive(images[0].id);
+       }
   };
 
-  const handleRemoveImage = () => {
-      setImageState(null);
-      setSelectedFile(null);
-      setMetadata(null);
-      // Reset critical pipeline state
-      setLutData(null);
-      setLutName(null);
-      // Reset file input value so same file can be selected again
-      if (fileInputRef.current) fileInputRef.current.value = '';
+  // Batch Export Process Loop
+  useEffect(() => {
+      // Conditions to process the current image in the queue
+      if (!batchExporting || batchQueue.length === 0) return;
+
+      const currentId = batchQueue[0];
+
+      // Wait until the active image matches the current queue item AND is fully loaded/processed
+      if (activeId === currentId && imageState?.id === currentId && !loading && !exporting) {
+
+           const processExport = async () => {
+               // Wait for GL render (double RAF)
+               await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+               if (!glCanvasRef.current) return;
+
+               const result = glCanvasRef.current.captureHighRes();
+               if (!result) return;
+
+               const { width, height, data } = result;
+               const currentImg = images.find(i => i.id === currentId);
+
+               const worker = new Worker(new URL('../workers/export.worker.js', import.meta.url), { type: 'module' });
+
+               // Timeout safety
+               const workerTimeout = setTimeout(() => {
+                   console.error("Batch export timed out for image", currentId);
+                   worker.terminate();
+                   setBatchQueue(prev => prev.slice(1));
+                   if (batchQueue.length > 1) setActive(batchQueue[1]);
+                   else setBatchExporting(false);
+               }, 60000);
+
+               worker.onmessage = async (e) => {
+                   clearTimeout(workerTimeout);
+                   const { type, buffer } = e.data;
+                   if (type === 'success') {
+                       const mimeType = exportFormat === 'tiff' ? 'image/tiff' : `image/${exportFormat}`;
+                       const blob = new Blob([buffer], { type: mimeType });
+
+                       const originalName = currentImg ? currentImg.name.split('.').slice(0, -1).join('.') : 'output';
+                       const cleanLogName = targetLogSpace.replace(/\s+/g, '-');
+                       const ext = exportFormat === 'tiff' ? 'tiff' : exportFormat === 'jpeg' ? 'jpg' : exportFormat;
+                       const filename = `${originalName}_${cleanLogName}.${ext}`;
+
+                       if (batchDirHandle.current) {
+                           try {
+                               const fileHandle = await batchDirHandle.current.getFileHandle(filename, { create: true });
+                               const writable = await fileHandle.createWritable();
+                               await writable.write(blob);
+                               await writable.close();
+                           } catch (err) {
+                               console.error("File write failed", err);
+                           }
+                       } else if (batchZip.current) {
+                           batchZip.current.file(filename, blob);
+                       }
+
+                       worker.terminate();
+
+                       // Move to next
+                       const nextQueue = batchQueue.slice(1);
+                       setBatchQueue(nextQueue);
+
+                       if (nextQueue.length > 0) {
+                           setActive(nextQueue[0]);
+                       } else {
+                           // Done
+                           if (batchZip.current) {
+                               const content = await batchZip.current.generateAsync({ type: "blob" });
+                               const a = document.createElement('a');
+                               a.href = URL.createObjectURL(content);
+                               a.download = `batch_export_${new Date().toISOString().slice(0,10)}.zip`;
+                               document.body.appendChild(a);
+                               a.click();
+                               document.body.removeChild(a);
+                               URL.revokeObjectURL(a.href);
+                           }
+                           setBatchExporting(false);
+                           batchDirHandle.current = null;
+                           batchZip.current = null;
+                           // Optional: notify success
+                       }
+                   } else {
+                       // On Error, try to continue
+                       worker.terminate();
+                       setBatchQueue(prev => prev.slice(1));
+                       if (batchQueue.length > 1) setActive(batchQueue[1]);
+                       else setBatchExporting(false);
+                   }
+               };
+
+               worker.postMessage({
+                  width,
+                  height,
+                  data: data,
+                  channels: 4,
+                  logSpace: targetLogSpace,
+                  format: exportFormat,
+                  quality: 0.95
+               }, [data.buffer]);
+           };
+
+           processExport();
+      }
+  }, [batchExporting, batchQueue, activeId, imageState, loading, exporting, setActive, exportFormat, targetLogSpace, images]);
+
+
+  const handleFileSelect = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      addImages(Array.from(e.target.files));
+      e.target.value = '';
+    }
   };
 
   const handleTriggerUpload = () => {
@@ -277,6 +507,7 @@ const RawUploader = () => {
       }
   };
 
+  // LUT Handlers ...
   const handleLutSelect = (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -312,35 +543,16 @@ const RawUploader = () => {
   };
 
   // Reset Functions
-  const resetWB = () => {
-      setWbRed(1.0);
-      setWbGreen(1.0);
-      setWbBlue(1.0);
-  };
+  const resetWB = () => { setWbRed(1.0); setWbGreen(1.0); setWbBlue(1.0); };
+  const resetExposureSettings = () => { setExposure(0.0); setMeteringMode('hybrid'); };
+  const resetEnhancements = () => { setContrast(1.0); setSaturation(1.0); };
+  const resetTone = () => { setHighlights(0.0); setShadows(0.0); setWhites(0.0); setBlacks(0.0); };
+  const resetAdvanced = () => { setInputGamma(1.0); setImgStats(null); };
 
-  const resetExposureSettings = () => {
-      setExposure(0.0);
-      setMeteringMode('hybrid');
-  };
+  // ---------------------------------------------------------
+  // UI Components
+  // ---------------------------------------------------------
 
-  const resetEnhancements = () => {
-      setContrast(1.0);
-      setSaturation(1.0);
-  };
-
-  const resetTone = () => {
-      setHighlights(0.0);
-      setShadows(0.0);
-      setWhites(0.0);
-      setBlacks(0.0);
-  };
-
-  const resetAdvanced = () => {
-      setInputGamma(1.0);
-      setImgStats(null);
-  };
-
-  // Styled File Input Component
   const FileInput = (
     <div className="flex flex-col items-center w-full">
         <label
@@ -353,7 +565,7 @@ const RawUploader = () => {
                 </div>
                 <div className="text-center">
                     <span className="font-semibold text-gray-700 dark:text-gray-200 block mb-1">
-                        {t('uploadPrompt')}
+                        {t('uploadPrompt') || "Click to Upload"}
                     </span>
                     <span className="text-xs text-gray-400 dark:text-gray-500">
                         RAW (.ARW, .CR2, .DNG...)
@@ -364,23 +576,36 @@ const RawUploader = () => {
     </div>
   );
 
+  const Gallery = (
+      <GalleryPanel
+        images={images}
+        activeId={activeId}
+        onSelect={setActive}
+        onRemove={removeImage}
+        onAdd={handleTriggerUpload}
+      />
+  );
+
+  const displayError = error || galleryError;
+
   return (
     <>
-    {/* Hidden Input - Always rendered to preserve ref */}
     <input
         ref={fileInputRef}
         id="raw-upload-input"
         type="file"
         name="file_upload"
         className="hidden"
+        multiple // Enable multiple files
         accept=".ARW,.CR2,.CR3,.DNG,.NEF,.ORF,.RAF"
         onChange={handleFileSelect}
     />
     <ResponsiveLayout
         fileInput={FileInput}
-        loading={loading}
-        error={error}
+        loading={loading || galleryLoading}
+        error={displayError}
         exporting={exporting}
+        gallery={Gallery}
         controls={{
             basic: <BasicControls
                 wbRed={wbRed} setWbRed={setWbRed}
@@ -408,6 +633,9 @@ const RawUploader = () => {
             export: <ExportControls
                 exportFormat={exportFormat} setExportFormat={setExportFormat}
                 handleExport={handleExport} exporting={exporting}
+                handleBatchExport={handleBatchExport}
+                batchExporting={batchExporting}
+                hasMultipleImages={images.length > 1}
             />,
             advanced: <AdvancedControls
                 inputGamma={inputGamma} setInputGamma={setInputGamma}
@@ -416,7 +644,7 @@ const RawUploader = () => {
             />
         }}
     >
-        {imageState && (
+        {imageState && activeId ? (
             <div
                 className="relative w-full h-full flex items-center justify-center select-none"
                 onPointerDown={() => setIsComparing(true)}
@@ -426,7 +654,6 @@ const RawUploader = () => {
                 onTouchEnd={() => setIsComparing(false)}
                 onTouchCancel={() => setIsComparing(false)}
             >
-                {/* Comparison Indicator */}
                 {isComparing && (
                     <div className="absolute top-6 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none">
                         <div className="flex items-center gap-2 px-4 py-2 bg-black/70 backdrop-blur-md rounded-full text-white shadow-xl border border-white/20">
@@ -436,17 +663,19 @@ const RawUploader = () => {
                     </div>
                 )}
 
-                {/* Floating Action Buttons Overlay - Moved to bottom right to avoid header overlap */}
+                {batchExporting && (
+                    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm text-white">
+                        <div className="w-16 h-16 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                        <h2 className="text-xl font-bold mb-2">Processing Batch</h2>
+                        <p className="text-sm text-gray-300">
+                            Processing {images.length - batchQueue.length + 1} of {images.length}
+                        </p>
+                    </div>
+                )}
+
                 <div className="absolute bottom-6 right-6 z-50 flex gap-3 pointer-events-auto">
-                    <button
-                        onClick={handleTriggerUpload}
-                        className="p-3 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black/70 text-gray-700 dark:text-white rounded-full backdrop-blur-md transition-all shadow-xl border border-gray-200 dark:border-white/10 hover:scale-105 active:scale-95"
-                        title={t('actions.replace')}
-                    >
-                        <RefreshCw size={20} />
-                    </button>
-                    <button
-                        onClick={handleRemoveImage}
+                     <button
+                        onClick={() => removeImage(activeId)}
                         className="p-3 bg-red-100 dark:bg-red-900/50 hover:bg-red-200 dark:hover:bg-red-900/70 text-red-600 dark:text-red-400 rounded-full backdrop-blur-md transition-all shadow-xl border border-red-200 dark:border-red-800/30 hover:scale-105 active:scale-95"
                         title={t('actions.remove')}
                     >
@@ -477,7 +706,7 @@ const RawUploader = () => {
                     lutSize={lutSize}
                 />
             </div>
-        )}
+        ) : null}
     </ResponsiveLayout>
     </>
   );
