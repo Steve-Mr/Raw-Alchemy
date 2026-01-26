@@ -13,25 +13,26 @@ self.onmessage = async (e) => {
 
       await decoder.open(new Uint8Array(fileBuffer));
 
-      // Attempt to unpack thumbnail
-      await decoder.unpackThumb();
+      // Use the fork-specific method `thumbnailData` as requested.
+      // This internally handles unpacking and retrieval.
+      const thumbResult = await decoder.thumbnailData();
 
-      // Retrieve thumbnail data
-      // Note: checking for property existence in case API differs
-      const result = await decoder.thumbData();
-
-      if (!result || !result.data) {
+      if (!thumbResult || !thumbResult.data) {
           throw new Error("No thumbnail data returned");
       }
+
+      // Format mapping from LibRaw (approximate/common)
+      // The wrapper might return strings like 'jpeg' or numeric types.
+      // The example checks `thumbnail.format === 'jpeg'`.
 
       self.postMessage({
         type: 'thumbSuccess',
         id,
-        data: result.data,
-        width: result.width,
-        height: result.height,
-        format: result.format // usually mapped to LibRaw internal format codes
-      }, [result.data.buffer]);
+        data: thumbResult.data,
+        width: thumbResult.width,
+        height: thumbResult.height,
+        format: thumbResult.format // Pass through format info ('jpeg', 'bitmap', etc.)
+      }, [thumbResult.data.buffer]);
 
     } catch (err) {
       console.error("Thumbnail extraction failed:", err);
@@ -50,39 +51,21 @@ self.onmessage = async (e) => {
 
       console.log(`Worker: Processing started (Mode: ${mode})`);
 
-      // Open the file with specific settings for Linear Camera Space
-      // We use redundant keys (camelCase and snake_case) to ensure the wrapper
-      // respects the settings regardless of the specific build version conventions.
       const settings = {
-        // Color Space: ProPhoto RGB
         outputColor: 4,
         output_color: 4,
-
-        // Bit Depth: 16-bit
         outputBps: 16,
         output_bps: 16,
-
-        // Gamma: Strict Linear (1.0, 1.0)
-        // CRITICAL: Prevent default sRGB Gamma 2.2 fallback which causes "washed out" look.
-        // The LibRaw WASM wrapper strictly checks for an array of length 6 for 'gamm'.
-        // Passing [1.0, 1.0] causes it to ignore the setting and use default Gamma 2.2.
-        // Indices: [0]=gamma(1.0), [1]=slope(1.0), [2-5]=unused(0)
         gamm: [1.0, 1.0, 0, 0, 0, 0],
-        gamma: [1.0, 1.0], // Fallback if wrapper changes, but 'gamm' is the key in C++
-
-        // Brightness/Saturation: Disable auto adjustments
+        gamma: [1.0, 1.0],
         noAutoBright: true,
         no_auto_bright: true,
         userSat: 0,
         user_sat: 0,
-
-        // White Balance: Use Camera As-Shot
         useCameraWb: true,
         use_camera_wb: true,
         useAutoWb: false,
         use_auto_wb: false,
-
-        // Multipliers: Unit (fallback if WB fails, to avoid green tint if applied manually)
         userMul: [1.0, 1.0, 1.0, 1.0],
         user_mul: [1.0, 1.0, 1.0, 1.0],
       };
@@ -95,11 +78,9 @@ self.onmessage = async (e) => {
       await decoder.open(new Uint8Array(fileBuffer), settings);
       console.log("Worker: File opened successfully");
 
-      // Get Metadata (Verbose for color matrices)
       const meta = await decoder.metadata(true);
       console.log("Worker: Metadata retrieved", meta);
 
-      // Helper to flatten nested arrays
       const flattenMatrix = (mat) => {
           if (!mat || !Array.isArray(mat)) return mat;
           if (mat.length > 0 && Array.isArray(mat[0])) {
@@ -118,18 +99,14 @@ self.onmessage = async (e) => {
           return mat;
       };
 
-      // Extract and normalize Color Metadata from known paths
-      // 1. cam_xyz (Camera to XYZ)
       if (meta.color_data && meta.color_data.cam_xyz) {
           meta.cam_xyz = flattenMatrix(meta.color_data.cam_xyz);
       }
 
-      // 2. rgb_cam (sRGB to Camera - usually)
       if (meta.color_data && meta.color_data.rgb_cam) {
           meta.rgb_cam = flattenMatrix(meta.color_data.rgb_cam);
       }
 
-      // 3. cam_mul (White Balance)
       if (meta.color_data && meta.color_data.cam_mul) {
           meta.cam_mul = meta.color_data.cam_mul;
       }
@@ -144,10 +121,9 @@ self.onmessage = async (e) => {
       let width = meta.width;
       let height = meta.height;
       let channels = 3;
-      let bitDepth = 8; // Default assumption
+      let bitDepth = 8;
 
       if (mode === 'bayer') {
-        // BAYER PATH
         try {
             console.log("Worker: Attempting unpack...");
             await decoder.runFn('unpack');
@@ -160,7 +136,7 @@ self.onmessage = async (e) => {
                 outputData = result.data;
                 width = result.width;
                 height = result.height;
-                channels = 1; // Bayer is single channel
+                channels = 1;
 
                 if (outputData instanceof Uint16Array) {
                     bitDepth = 16;
@@ -176,14 +152,8 @@ self.onmessage = async (e) => {
         }
 
       } else {
-        // RGB PATH (Linear Camera Space)
         console.log("Worker: Processing RGB (Linear Camera Space)...");
-
-        // Settings were applied in open().
-        // Just get the data.
-
         const result = await decoder.imageData();
-
         outputData = result.data;
         width = result.width;
         height = result.height;
@@ -197,7 +167,6 @@ self.onmessage = async (e) => {
         console.log(`Worker: RGB data ready. ${width}x${height} ${bitDepth}-bit`);
       }
 
-      // Transfer the result back
       self.postMessage({
         type: 'success',
         id,
@@ -207,7 +176,7 @@ self.onmessage = async (e) => {
         channels,
         bitDepth,
         mode,
-        meta // Pass metadata for Matrix/WB extraction
+        meta
       }, [outputData.buffer]);
 
     } catch (err) {

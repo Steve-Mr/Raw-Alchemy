@@ -30,7 +30,7 @@ const RawUploader = () => {
   const [metadata, setMetadata] = useState(null);
 
   // LUT State
-  const { luts, importLuts, deleteLut } = useLutLibrary();
+  const { luts, importLuts, deleteLut, isLoading: lutLoading, error: lutError } = useLutLibrary();
 
   // Pipeline State
   const [lutData, setLutData] = useState(null);
@@ -490,6 +490,8 @@ const RawUploader = () => {
                 onImportLuts={importLuts}
                 onDeleteLut={deleteLut}
                 onApplyLut={handleApplyLut}
+                isLoading={lutLoading}
+                error={lutError}
             />,
             export: <ExportControls
                 exportFormat={exportFormat} setExportFormat={setExportFormat}
