@@ -5,7 +5,43 @@ let decoder = null;
 self.onmessage = async (e) => {
   const { command, fileBuffer, mode, id } = e.data;
 
-  if (command === 'decode') {
+  if (command === 'extractThumbnail') {
+    try {
+      if (!decoder) {
+        decoder = new LibRaw();
+      }
+
+      await decoder.open(new Uint8Array(fileBuffer));
+
+      // Attempt to unpack thumbnail
+      await decoder.unpackThumb();
+
+      // Retrieve thumbnail data
+      // Note: checking for property existence in case API differs
+      const result = await decoder.thumbData();
+
+      if (!result || !result.data) {
+          throw new Error("No thumbnail data returned");
+      }
+
+      self.postMessage({
+        type: 'thumbSuccess',
+        id,
+        data: result.data,
+        width: result.width,
+        height: result.height,
+        format: result.format // usually mapped to LibRaw internal format codes
+      }, [result.data.buffer]);
+
+    } catch (err) {
+      console.error("Thumbnail extraction failed:", err);
+      self.postMessage({
+        type: 'thumbError',
+        id,
+        error: err.message
+      });
+    }
+  } else if (command === 'decode') {
     try {
       if (!decoder) {
         console.log("Worker: Initializing LibRaw...");
