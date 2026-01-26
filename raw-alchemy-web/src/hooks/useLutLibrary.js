@@ -40,11 +40,12 @@ export const useLutLibrary = () => {
     setIsLoading(true);
     setError(null);
     try {
+      // Convert FileList to array immediately to avoid race conditions
+      // where the input is cleared before the async operation completes
+      const fileArray = Array.from(files);
+
       const db = await openDB(DB_NAME, DB_VERSION);
       const newLuts = [];
-
-      // Convert FileList to array if needed
-      const fileArray = Array.from(files);
 
       for (const file of fileArray) {
         try {
