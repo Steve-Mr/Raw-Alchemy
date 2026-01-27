@@ -88,12 +88,52 @@ self.onmessage = async (e) => {
 
           const downscaled = createThumbnailFromImageData(imageData.data, imageData.width, imageData.height);
 
-          thumbResult = {
-              data: downscaled.data,
-              width: downscaled.width,
-              height: downscaled.height,
-              format: 3 // Raw RGB buffer
-          };
+          // Convert raw RGB to JPEG Blob using OffscreenCanvas
+          if (typeof OffscreenCanvas !== 'undefined') {
+              try {
+                  const canvas = new OffscreenCanvas(downscaled.width, downscaled.height);
+                  const ctx = canvas.getContext('2d');
+
+                  // ImageData expects Uint8ClampedArray and RGBA (4 channels)
+                  const pixelCount = downscaled.width * downscaled.height;
+                  const rgbaData = new Uint8ClampedArray(pixelCount * 4);
+
+                  for (let i = 0; i < pixelCount; i++) {
+                      rgbaData[i * 4] = downscaled.data[i * 3];     // R
+                      rgbaData[i * 4 + 1] = downscaled.data[i * 3 + 1]; // G
+                      rgbaData[i * 4 + 2] = downscaled.data[i * 3 + 2]; // B
+                      rgbaData[i * 4 + 3] = 255;                    // A
+                  }
+
+                  const imageData = new ImageData(rgbaData, downscaled.width, downscaled.height);
+                  ctx.putImageData(imageData, 0, 0);
+
+                  const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.8 });
+                  const arrayBuffer = await blob.arrayBuffer();
+
+                  thumbResult = {
+                      data: new Uint8Array(arrayBuffer),
+                      width: downscaled.width,
+                      height: downscaled.height,
+                      format: 1 // JPEG
+                  };
+              } catch (cvsErr) {
+                  console.error("OffscreenCanvas fallback failed:", cvsErr);
+                  thumbResult = {
+                      data: downscaled.data,
+                      width: downscaled.width,
+                      height: downscaled.height,
+                      format: 3 // Raw RGB (will likely fail in UI)
+                  };
+              }
+          } else {
+              thumbResult = {
+                  data: downscaled.data,
+                  width: downscaled.width,
+                  height: downscaled.height,
+                  format: 3
+              };
+          }
       }
 
       console.log(`Worker: Thumbnail ready (${thumbResult.width}x${thumbResult.height}, format: ${thumbResult.format})`);
