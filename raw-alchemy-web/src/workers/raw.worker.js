@@ -96,6 +96,11 @@ self.onmessage = async (e) => {
           };
       }
 
+      console.log(`Worker: Thumbnail ready (${thumbResult.width}x${thumbResult.height}, format: ${thumbResult.format})`);
+
+      // Note: We do NOT transfer the buffer here ([thumbResult.data.buffer])
+      // because it causes DataCloneError if the buffer was already detached or managed by WASM.
+      // Copying for small thumbnails is negligible performance cost.
       self.postMessage({
         type: 'thumbSuccess',
         id,
@@ -103,7 +108,7 @@ self.onmessage = async (e) => {
         width: thumbResult.width,
         height: thumbResult.height,
         format: thumbResult.format
-      }, [thumbResult.data.buffer]);
+      });
 
     } catch (err) {
       console.error("Thumbnail extraction failed:", err);
