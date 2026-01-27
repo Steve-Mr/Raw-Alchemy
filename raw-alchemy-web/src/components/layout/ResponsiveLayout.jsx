@@ -28,7 +28,7 @@ const ResponsiveLayout = ({
   }, []);
 
   const tabs = [
-    { id: 'gallery', label: 'Gallery', icon: ImageIcon },
+    { id: 'gallery', label: t('gallery.title'), icon: ImageIcon },
     { id: 'basic', label: t('tabs.basic'), icon: Settings },
     { id: 'tone', label: t('tabs.tone'), icon: Sliders },
     { id: 'color', label: t('tabs.color'), icon: Palette },

@@ -9,7 +9,7 @@ const GalleryGrid = ({
     onDelete,
     onAdd,
     isProcessing,
-    // showAddButton // Currently unused on mobile as we want consistent action availability
+    showAddButton // Controlled by parent (RawUploader)
 }) => {
     const { t } = useTranslation();
 
@@ -21,21 +21,23 @@ const GalleryGrid = ({
              </div>
 
              <div className="grid grid-cols-3 gap-3 overflow-y-auto pb-20 custom-scrollbar">
-                 {/* Add Button Tile - Always Visible on Mobile */}
-                 <button
-                    onClick={onAdd}
-                    disabled={isProcessing}
-                    className="aspect-square rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700 flex flex-col items-center justify-center gap-2 hover:border-primary-light dark:hover:border-primary-dark hover:bg-gray-50 dark:hover:bg-white/5 transition-all"
-                 >
-                     {isProcessing ? (
-                         <div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-                     ) : (
-                         <>
-                            <Plus size={24} className="text-gray-400" />
-                            <span className="text-xs font-medium text-gray-500">{t('gallery.add')}</span>
-                         </>
-                     )}
-                 </button>
+                 {/* Add Button Tile */}
+                 {showAddButton && (
+                     <button
+                        onClick={onAdd}
+                        disabled={isProcessing}
+                        className="aspect-square rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700 flex flex-col items-center justify-center gap-2 hover:border-primary-light dark:hover:border-primary-dark hover:bg-gray-50 dark:hover:bg-white/5 transition-all"
+                     >
+                         {isProcessing ? (
+                             <div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                         ) : (
+                             <>
+                                <Plus size={24} className="text-gray-400" />
+                                <span className="text-xs font-medium text-gray-500">{t('gallery.add')}</span>
+                             </>
+                         )}
+                     </button>
+                 )}
 
                  {images.map(img => (
                      <div

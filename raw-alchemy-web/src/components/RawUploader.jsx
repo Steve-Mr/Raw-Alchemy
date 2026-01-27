@@ -461,6 +461,7 @@ const RawUploader = () => {
                 onDelete={gallery.deletePhoto}
                 onAdd={handleTriggerUpload}
                 isProcessing={gallery.isProcessing}
+                showAddButton={!!gallery.selectedId} // Only show if image is selected (editing)
             />
         }
         controls={{
