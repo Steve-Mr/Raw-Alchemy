@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, Sliders, Palette, Download, Zap, Info, Image as ImageIcon } from 'lucide-react';
+import { Settings, Sliders, Palette, Download, Info, Image as ImageIcon } from 'lucide-react';
 import ThemeToggle from '../ThemeToggle';
 import LanguageToggle from '../LanguageToggle';
 import InfoModal from '../InfoModal';
@@ -33,11 +33,20 @@ const ResponsiveLayout = ({
     { id: 'tone', label: t('tabs.tone'), icon: Sliders },
     { id: 'color', label: t('tabs.color'), icon: Palette },
     { id: 'export', label: t('tabs.export'), icon: Download },
-    { id: 'advanced', label: t('tabs.advanced'), icon: Zap },
   ];
 
   const renderContent = () => {
     if (activeTab === 'gallery') return galleryGrid;
+    if (activeTab === 'color') {
+      return (
+        <div className="space-y-6">
+          {controls.color}
+          <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
+            {controls.advanced}
+          </div>
+        </div>
+      );
+    }
     return controls[activeTab] || null;
   };
 
