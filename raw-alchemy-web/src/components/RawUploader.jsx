@@ -512,10 +512,13 @@ const RawUploader = () => {
                        }, [result.data.buffer]);
                   });
 
-                  const name = file.name.split('.').slice(0, -1).join('.');
-                  const cleanLog = adjustments.targetLogSpace.replace(/\s+/g, '-');
+                  // Robust filename generation
+                  const baseName = file.name.replace(/\.[^/.]+$/, "");
+                  const logSuffix = adjustments.targetLogSpace === 'None' ? '' : `_${adjustments.targetLogSpace.replace(/\s+/g, '-')}`;
                   const ext = exportFormat === 'tiff' ? 'tiff' : exportFormat === 'jpeg' ? 'jpg' : exportFormat;
-                  const filename = `${name}_${cleanLog}.${ext}`;
+                  // Sanitize filename for compatibility
+                  const safeName = `${baseName}${logSuffix}`.replace(/[^a-z0-9_\-\.]/gi, '_');
+                  const filename = `${safeName}.${ext}`;
 
                   if (useFileSystem && dirHandle) {
                       const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
