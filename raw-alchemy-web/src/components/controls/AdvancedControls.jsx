@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Activity, Zap, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
+import { Activity, Zap, RotateCcw, ChevronDown, ChevronUp, TrendingUp } from 'lucide-react';
 import PrecisionSlider from './PrecisionSlider';
 
 const AdvancedControls = ({
@@ -31,7 +31,7 @@ const AdvancedControls = ({
                 <div className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-800 p-5 rounded-2xl shadow-sm">
                     <div className="flex justify-between items-center mb-4">
                         <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                            <Zap size={14} className="text-yellow-500" />
+                            <TrendingUp size={14} className="text-yellow-500" />
                             {t('advanced.inputLinearization')}
                         </h3>
                         <button
