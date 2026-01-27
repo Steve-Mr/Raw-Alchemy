@@ -157,6 +157,14 @@ export const useGallery = () => {
         await storage.saveState(selectedId, adjustments);
     };
 
+    const getFile = async (id) => {
+        return await storage.getImageFile(id);
+    };
+
+    const getState = async (id) => {
+        return await storage.loadState(id);
+    };
+
     return {
         images,
         selectedId,
@@ -168,6 +176,8 @@ export const useGallery = () => {
         isProcessing,
         getSelectedFile,
         getSelectedState,
-        saveSelectedState
+        saveSelectedState,
+        getFile,
+        getState
     };
 };

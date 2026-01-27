@@ -49,7 +49,20 @@
   "export": {
     "format": "格式",
     "button": "保存图片",
-    "encoding": "处理中..."
+    "encoding": "处理中...",
+    "batch_title": "批量导出",
+    "batch_button": "批量导出",
+    "select_images": "选择要导出的图片",
+    "remove_after": "导出后从图库移除",
+    "start": "开始导出",
+    "processing": "处理中... {{current}} / {{total}}",
+    "complete_title": "导出完成",
+    "delete_confirm": "{{count}} 张图片已成功导出。是否从图库中移除？",
+    "delete_now": "移除",
+    "keep": "保留",
+    "select_all": "全选",
+    "deselect_all": "取消全选",
+    "no_selection": "未选择图片"
   },
   "advanced": {
     "title": "高级",
@@ -72,7 +85,8 @@
     "remove": "移除图片",
     "replace": "替换",
     "reset": "重置",
-    "original": "原图"
+    "original": "原图",
+    "cancel": "取消"
   },
   "gallery": {
     "title": "图库",

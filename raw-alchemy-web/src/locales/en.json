@@ -49,7 +49,20 @@
   "export": {
     "format": "Format",
     "button": "Save Image",
-    "encoding": "Processing..."
+    "encoding": "Processing...",
+    "batch_title": "Batch Export",
+    "batch_button": "Batch Export",
+    "select_images": "Select Images to Export",
+    "remove_after": "Remove from gallery after export",
+    "start": "Start Export",
+    "processing": "Processing... {{current}} / {{total}}",
+    "complete_title": "Export Complete",
+    "delete_confirm": "{{count}} images exported successfully. Do you want to remove them from the gallery?",
+    "delete_now": "Remove",
+    "keep": "Keep",
+    "select_all": "Select All",
+    "deselect_all": "Deselect All",
+    "no_selection": "No images selected"
   },
   "advanced": {
     "title": "Advanced",
@@ -72,7 +85,8 @@
     "remove": "Remove Image",
     "replace": "Replace",
     "reset": "Reset",
-    "original": "Original"
+    "original": "Original",
+    "cancel": "Cancel"
   },
   "gallery": {
     "title": "Gallery",
