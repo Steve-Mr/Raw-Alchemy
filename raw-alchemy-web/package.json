@@ -18,8 +18,6 @@
     "idb": "^8.0.3",
     "libraw-wasm": "github:Steve-Mr/LibRaw-Wasm",
     "lucide-react": "^0.563.0",
-    "node-addon-api": "^8.5.0",
-    "node-gyp": "^12.1.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-i18next": "^16.5.3",

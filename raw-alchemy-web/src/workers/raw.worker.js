@@ -2,6 +2,52 @@ import LibRaw from 'libraw-wasm';
 
 let decoder = null;
 
+// Helper to downscale image data to thumbnail size
+const createThumbnailFromImageData = (data, width, height) => {
+    // Target size: ~300px long edge
+    const scale = Math.min(300 / width, 300 / height);
+    if (scale >= 1) return { data, width, height }; // Don't upscale
+
+    const targetW = Math.floor(width * scale);
+    const targetH = Math.floor(height * scale);
+    const targetSize = targetW * targetH * 3; // RGB 8-bit
+    const targetData = new Uint8Array(targetSize);
+
+    // Nearest Neighbor for speed on fallback
+    // We assume input is RGB 8-bit or 16-bit.
+    // If 16-bit, we need to map to 8-bit.
+    // LibRaw imageData() typically returns TypedArray based on outputBps.
+    // Default is usually 8-bit unless specified.
+
+    // Check if input is 16-bit (Uint16Array)
+    const is16Bit = data instanceof Uint16Array;
+    const stride = 3; // RGB
+
+    for (let y = 0; y < targetH; y++) {
+        for (let x = 0; x < targetW; x++) {
+            const srcX = Math.floor(x / scale);
+            const srcY = Math.floor(y / scale);
+            const srcIdx = (srcY * width + srcX) * stride;
+            const targetIdx = (y * targetW + x) * 3;
+
+            if (srcIdx < data.length - 2) {
+                 if (is16Bit) {
+                     // Simple tone mapping / range squash for thumbnail
+                     targetData[targetIdx] = data[srcIdx] >> 8;
+                     targetData[targetIdx + 1] = data[srcIdx + 1] >> 8;
+                     targetData[targetIdx + 2] = data[srcIdx + 2] >> 8;
+                 } else {
+                     targetData[targetIdx] = data[srcIdx];
+                     targetData[targetIdx + 1] = data[srcIdx + 1];
+                     targetData[targetIdx + 2] = data[srcIdx + 2];
+                 }
+            }
+        }
+    }
+
+    return { data: targetData, width: targetW, height: targetH };
+};
+
 self.onmessage = async (e) => {
   const { command, fileBuffer, mode, id } = e.data;
 
@@ -11,19 +57,44 @@ self.onmessage = async (e) => {
         decoder = new LibRaw();
       }
 
-      await decoder.open(new Uint8Array(fileBuffer));
+      const buffer = new Uint8Array(fileBuffer);
+      await decoder.open(buffer);
 
-      // Use the fork-specific method `thumbnailData` as requested.
-      // This internally handles unpacking and retrieval.
-      const thumbResult = await decoder.thumbnailData();
+      // 1. Try fast thumbnail extraction (embedded JPEG)
+      let thumbResult = await decoder.thumbnailData();
 
+      // 2. Fallback: Half-size decode if no embedded thumbnail
       if (!thumbResult || !thumbResult.data) {
-          throw new Error("No thumbnail data returned");
-      }
+          console.warn("Fast thumbnail extraction failed, using half-size decode fallback.");
 
-      // Format mapping from LibRaw (approximate/common)
-      // The wrapper might return strings like 'jpeg' or numeric types.
-      // The example checks `thumbnail.format === 'jpeg'`.
+          // Re-open with halfSize settings
+          // LibRaw-Wasm wrapper doesn't support changing settings mid-flight easily
+          // without re-opening or calling specific methods.
+          // The example shows passing settings to open().
+
+          await decoder.open(buffer, {
+              halfSize: true,
+              // Optimized for speed
+              useAutoWb: true, // Use auto WB for preview if camera WB fails
+              noInterpolation: false,
+              outputBps: 8 // Force 8-bit for thumbnail
+          });
+
+          const imageData = await decoder.imageData();
+
+          if (!imageData || !imageData.data) {
+              throw new Error("Fallback decode failed");
+          }
+
+          const downscaled = createThumbnailFromImageData(imageData.data, imageData.width, imageData.height);
+
+          thumbResult = {
+              data: downscaled.data,
+              width: downscaled.width,
+              height: downscaled.height,
+              format: 3 // Raw RGB buffer
+          };
+      }
 
       self.postMessage({
         type: 'thumbSuccess',
@@ -31,7 +102,7 @@ self.onmessage = async (e) => {
         data: thumbResult.data,
         width: thumbResult.width,
         height: thumbResult.height,
-        format: thumbResult.format // Pass through format info ('jpeg', 'bitmap', etc.)
+        format: thumbResult.format
       }, [thumbResult.data.buffer]);
 
     } catch (err) {

@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "libraw-wasm": "github:Steve-Mr/LibRaw-Wasm"
+  }
+}
