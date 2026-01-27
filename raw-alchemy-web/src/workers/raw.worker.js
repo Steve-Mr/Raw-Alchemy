@@ -2,10 +2,163 @@ import LibRaw from 'libraw-wasm';
 
 let decoder = null;
 
+// Helper to downscale image data to thumbnail size
+const createThumbnailFromImageData = (data, width, height) => {
+    // Target size: ~300px long edge
+    const scale = Math.min(300 / width, 300 / height);
+    if (scale >= 1) return { data, width, height }; // Don't upscale
+
+    const targetW = Math.floor(width * scale);
+    const targetH = Math.floor(height * scale);
+    const targetSize = targetW * targetH * 3; // RGB 8-bit
+    const targetData = new Uint8Array(targetSize);
+
+    // Nearest Neighbor for speed on fallback
+    // We assume input is RGB 8-bit or 16-bit.
+    // If 16-bit, we need to map to 8-bit.
+    // LibRaw imageData() typically returns TypedArray based on outputBps.
+    // Default is usually 8-bit unless specified.
+
+    // Check if input is 16-bit (Uint16Array)
+    const is16Bit = data instanceof Uint16Array;
+    const stride = 3; // RGB
+
+    for (let y = 0; y < targetH; y++) {
+        for (let x = 0; x < targetW; x++) {
+            const srcX = Math.floor(x / scale);
+            const srcY = Math.floor(y / scale);
+            const srcIdx = (srcY * width + srcX) * stride;
+            const targetIdx = (y * targetW + x) * 3;
+
+            if (srcIdx < data.length - 2) {
+                 if (is16Bit) {
+                     // Simple tone mapping / range squash for thumbnail
+                     targetData[targetIdx] = data[srcIdx] >> 8;
+                     targetData[targetIdx + 1] = data[srcIdx + 1] >> 8;
+                     targetData[targetIdx + 2] = data[srcIdx + 2] >> 8;
+                 } else {
+                     targetData[targetIdx] = data[srcIdx];
+                     targetData[targetIdx + 1] = data[srcIdx + 1];
+                     targetData[targetIdx + 2] = data[srcIdx + 2];
+                 }
+            }
+        }
+    }
+
+    return { data: targetData, width: targetW, height: targetH };
+};
+
 self.onmessage = async (e) => {
   const { command, fileBuffer, mode, id } = e.data;
 
-  if (command === 'decode') {
+  if (command === 'extractThumbnail') {
+    try {
+      if (!decoder) {
+        decoder = new LibRaw();
+      }
+
+      const buffer = new Uint8Array(fileBuffer);
+      await decoder.open(buffer);
+
+      // 1. Try fast thumbnail extraction (embedded JPEG)
+      let thumbResult = await decoder.thumbnailData();
+
+      // 2. Fallback: Half-size decode if no embedded thumbnail
+      if (!thumbResult || !thumbResult.data) {
+          console.warn("Fast thumbnail extraction failed, using half-size decode fallback.");
+
+          // Re-open with halfSize settings
+          // LibRaw-Wasm wrapper doesn't support changing settings mid-flight easily
+          // without re-opening or calling specific methods.
+          // The example shows passing settings to open().
+
+          await decoder.open(buffer, {
+              halfSize: true,
+              // Optimized for speed
+              useAutoWb: true, // Use auto WB for preview if camera WB fails
+              noInterpolation: false,
+              outputBps: 8 // Force 8-bit for thumbnail
+          });
+
+          const imageData = await decoder.imageData();
+
+          if (!imageData || !imageData.data) {
+              throw new Error("Fallback decode failed");
+          }
+
+          const downscaled = createThumbnailFromImageData(imageData.data, imageData.width, imageData.height);
+
+          // Convert raw RGB to JPEG Blob using OffscreenCanvas
+          if (typeof OffscreenCanvas !== 'undefined') {
+              try {
+                  const canvas = new OffscreenCanvas(downscaled.width, downscaled.height);
+                  const ctx = canvas.getContext('2d');
+
+                  // ImageData expects Uint8ClampedArray and RGBA (4 channels)
+                  const pixelCount = downscaled.width * downscaled.height;
+                  const rgbaData = new Uint8ClampedArray(pixelCount * 4);
+
+                  for (let i = 0; i < pixelCount; i++) {
+                      rgbaData[i * 4] = downscaled.data[i * 3];     // R
+                      rgbaData[i * 4 + 1] = downscaled.data[i * 3 + 1]; // G
+                      rgbaData[i * 4 + 2] = downscaled.data[i * 3 + 2]; // B
+                      rgbaData[i * 4 + 3] = 255;                    // A
+                  }
+
+                  const imageData = new ImageData(rgbaData, downscaled.width, downscaled.height);
+                  ctx.putImageData(imageData, 0, 0);
+
+                  const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.8 });
+                  const arrayBuffer = await blob.arrayBuffer();
+
+                  thumbResult = {
+                      data: new Uint8Array(arrayBuffer),
+                      width: downscaled.width,
+                      height: downscaled.height,
+                      format: 1 // JPEG
+                  };
+              } catch (cvsErr) {
+                  console.error("OffscreenCanvas fallback failed:", cvsErr);
+                  thumbResult = {
+                      data: downscaled.data,
+                      width: downscaled.width,
+                      height: downscaled.height,
+                      format: 3 // Raw RGB (will likely fail in UI)
+                  };
+              }
+          } else {
+              thumbResult = {
+                  data: downscaled.data,
+                  width: downscaled.width,
+                  height: downscaled.height,
+                  format: 3
+              };
+          }
+      }
+
+      console.log(`Worker: Thumbnail ready (${thumbResult.width}x${thumbResult.height}, format: ${thumbResult.format})`);
+
+      // Note: We do NOT transfer the buffer here ([thumbResult.data.buffer])
+      // because it causes DataCloneError if the buffer was already detached or managed by WASM.
+      // Copying for small thumbnails is negligible performance cost.
+      self.postMessage({
+        type: 'thumbSuccess',
+        id,
+        data: thumbResult.data,
+        width: thumbResult.width,
+        height: thumbResult.height,
+        format: thumbResult.format
+      });
+
+    } catch (err) {
+      console.error("Thumbnail extraction failed:", err);
+      self.postMessage({
+        type: 'thumbError',
+        id,
+        error: err.message
+      });
+    }
+  } else if (command === 'decode') {
     try {
       if (!decoder) {
         console.log("Worker: Initializing LibRaw...");
@@ -14,39 +167,21 @@ self.onmessage = async (e) => {
 
       console.log(`Worker: Processing started (Mode: ${mode})`);
 
-      // Open the file with specific settings for Linear Camera Space
-      // We use redundant keys (camelCase and snake_case) to ensure the wrapper
-      // respects the settings regardless of the specific build version conventions.
       const settings = {
-        // Color Space: ProPhoto RGB
         outputColor: 4,
         output_color: 4,
-
-        // Bit Depth: 16-bit
         outputBps: 16,
         output_bps: 16,
-
-        // Gamma: Strict Linear (1.0, 1.0)
-        // CRITICAL: Prevent default sRGB Gamma 2.2 fallback which causes "washed out" look.
-        // The LibRaw WASM wrapper strictly checks for an array of length 6 for 'gamm'.
-        // Passing [1.0, 1.0] causes it to ignore the setting and use default Gamma 2.2.
-        // Indices: [0]=gamma(1.0), [1]=slope(1.0), [2-5]=unused(0)
         gamm: [1.0, 1.0, 0, 0, 0, 0],
-        gamma: [1.0, 1.0], // Fallback if wrapper changes, but 'gamm' is the key in C++
-
-        // Brightness/Saturation: Disable auto adjustments
+        gamma: [1.0, 1.0],
         noAutoBright: true,
         no_auto_bright: true,
         userSat: 0,
         user_sat: 0,
-
-        // White Balance: Use Camera As-Shot
         useCameraWb: true,
         use_camera_wb: true,
         useAutoWb: false,
         use_auto_wb: false,
-
-        // Multipliers: Unit (fallback if WB fails, to avoid green tint if applied manually)
         userMul: [1.0, 1.0, 1.0, 1.0],
         user_mul: [1.0, 1.0, 1.0, 1.0],
       };
@@ -59,11 +194,9 @@ self.onmessage = async (e) => {
       await decoder.open(new Uint8Array(fileBuffer), settings);
       console.log("Worker: File opened successfully");
 
-      // Get Metadata (Verbose for color matrices)
       const meta = await decoder.metadata(true);
       console.log("Worker: Metadata retrieved", meta);
 
-      // Helper to flatten nested arrays
       const flattenMatrix = (mat) => {
           if (!mat || !Array.isArray(mat)) return mat;
           if (mat.length > 0 && Array.isArray(mat[0])) {
@@ -82,18 +215,14 @@ self.onmessage = async (e) => {
           return mat;
       };
 
-      // Extract and normalize Color Metadata from known paths
-      // 1. cam_xyz (Camera to XYZ)
       if (meta.color_data && meta.color_data.cam_xyz) {
           meta.cam_xyz = flattenMatrix(meta.color_data.cam_xyz);
       }
 
-      // 2. rgb_cam (sRGB to Camera - usually)
       if (meta.color_data && meta.color_data.rgb_cam) {
           meta.rgb_cam = flattenMatrix(meta.color_data.rgb_cam);
       }
 
-      // 3. cam_mul (White Balance)
       if (meta.color_data && meta.color_data.cam_mul) {
           meta.cam_mul = meta.color_data.cam_mul;
       }
@@ -108,10 +237,9 @@ self.onmessage = async (e) => {
       let width = meta.width;
       let height = meta.height;
       let channels = 3;
-      let bitDepth = 8; // Default assumption
+      let bitDepth = 8;
 
       if (mode === 'bayer') {
-        // BAYER PATH
         try {
             console.log("Worker: Attempting unpack...");
             await decoder.runFn('unpack');
@@ -124,7 +252,7 @@ self.onmessage = async (e) => {
                 outputData = result.data;
                 width = result.width;
                 height = result.height;
-                channels = 1; // Bayer is single channel
+                channels = 1;
 
                 if (outputData instanceof Uint16Array) {
                     bitDepth = 16;
@@ -140,14 +268,8 @@ self.onmessage = async (e) => {
         }
 
       } else {
-        // RGB PATH (Linear Camera Space)
         console.log("Worker: Processing RGB (Linear Camera Space)...");
-
-        // Settings were applied in open().
-        // Just get the data.
-
         const result = await decoder.imageData();
-
         outputData = result.data;
         width = result.width;
         height = result.height;
@@ -161,7 +283,6 @@ self.onmessage = async (e) => {
         console.log(`Worker: RGB data ready. ${width}x${height} ${bitDepth}-bit`);
       }
 
-      // Transfer the result back
       self.postMessage({
         type: 'success',
         id,
@@ -171,7 +292,7 @@ self.onmessage = async (e) => {
         channels,
         bitDepth,
         mode,
-        meta // Pass metadata for Matrix/WB extraction
+        meta
       }, [outputData.buffer]);
 
     } catch (err) {

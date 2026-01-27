@@ -5,44 +5,48 @@ import GLCanvas from './GLCanvas';
 import { getProPhotoToTargetMatrix, formatMatrixForUniform, LOG_SPACE_CONFIG } from '../utils/colorMath';
 import { calculateAutoExposure } from '../utils/metering';
 import { useLutLibrary } from '../hooks/useLutLibrary';
-import { usePersistence } from '../hooks/usePersistence';
+import { useGallery } from '../hooks/useGallery';
 
 // Layout & Controls
 import ResponsiveLayout from './layout/ResponsiveLayout';
+import GallerySidebar from './gallery/GallerySidebar';
+import GalleryGrid from './gallery/GalleryGrid';
 import BasicControls from './controls/BasicControls';
 import ToneControls from './controls/ToneControls';
 import ColorControls from './controls/ColorControls';
 import ExportControls from './controls/ExportControls';
 import AdvancedControls from './controls/AdvancedControls';
-import { UploadCloud, XCircle, RefreshCw, History } from 'lucide-react';
+import { UploadCloud, History } from 'lucide-react';
 
 const RawUploader = () => {
   const { t } = useTranslation();
+
+  // Gallery Hook
+  const gallery = useGallery();
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [imageState, setImageState] = useState(null);
   const [metadata, setMetadata] = useState(null);
 
   // LUT State
-  const { luts, importLuts, deleteLut } = useLutLibrary();
-  const { saveFile, saveAdjustments, loadSession, clearSession } = usePersistence();
+  const { luts, importLuts, deleteLut, isLoading: lutLoading, error: lutError } = useLutLibrary();
+
+  // Pipeline State
   const [lutData, setLutData] = useState(null);
   const [lutSize, setLutSize] = useState(null);
   const [lutName, setLutName] = useState(null);
 
-  // Pipeline State
   const [wbRed, setWbRed] = useState(1.0);
   const [wbBlue, setWbBlue] = useState(1.0);
   const [wbGreen, setWbGreen] = useState(1.0);
 
-  // Basic Adjustments State
   const [exposure, setExposure] = useState(0.0);
   const [initialExposure, setInitialExposure] = useState(0.0);
   const [saturation, setSaturation] = useState(1.0);
   const [contrast, setContrast] = useState(1.0);
   const [isComparing, setIsComparing] = useState(false);
 
-  // Advanced Tone Mapping
   const [highlights, setHighlights] = useState(0.0);
   const [shadows, setShadows] = useState(0.0);
   const [whites, setWhites] = useState(0.0);
@@ -57,6 +61,7 @@ const RawUploader = () => {
   const [exportFormat, setExportFormat] = useState('tiff');
 
   const [exporting, setExporting] = useState(false);
+
   const glCanvasRef = useRef(null);
   const workerRef = useRef(null);
   const exportWorkerRef = useRef(null);
@@ -64,29 +69,52 @@ const RawUploader = () => {
   const [imgStats, setImgStats] = useState(null);
 
   const isRestoringRef = useRef(false);
+  const saveTimeoutRef = useRef(null);
 
-  // Ref for the hidden file input to trigger it programmatically
+  // Ref for the hidden file input
   const fileInputRef = useRef(null);
 
-  // Load Session on Mount
-  useEffect(() => {
-    const checkSession = async () => {
-      // If shared target is present, skip session load (shared file takes precedence)
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get('shared_target') === 'true') return;
+  // Sidebar State
+  const [isGalleryCollapsed, setIsGalleryCollapsed] = useState(false);
 
-      const session = await loadSession();
-      if (session) {
-        setSelectedFile(session.file);
-        handleProcess(session.file, session.adjustments);
-      }
+  // Auto-collapse sidebar
+  useEffect(() => {
+    const handleResize = () => {
+        if (window.innerWidth < 1280 && window.innerWidth >= 1024) {
+            setIsGalleryCollapsed(true);
+        }
     };
-    checkSession();
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Save Adjustments on Change
+  // Handle Gallery Selection Change
   useEffect(() => {
-    if (!imageState) return;
+    const loadSelectedImage = async () => {
+        if (!gallery.selectedId) {
+            // Clear canvas if no selection
+            setImageState(null);
+            setSelectedFile(null);
+            setMetadata(null);
+            return;
+        }
+
+        const file = await gallery.getSelectedFile();
+        const savedAdjustments = await gallery.getSelectedState();
+
+        if (file) {
+            setSelectedFile(file);
+            handleProcess(file, savedAdjustments);
+        }
+    };
+
+    loadSelectedImage();
+  }, [gallery.selectedId]);
+
+  // Save Adjustments Debounced
+  useEffect(() => {
+    if (!imageState || !gallery.selectedId) return;
 
     const adjustments = {
       wbRed, wbGreen, wbBlue,
@@ -97,7 +125,13 @@ const RawUploader = () => {
       lutData, lutSize, lutName,
       exportFormat
     };
-    saveAdjustments(adjustments);
+
+    // Debounce save
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+        gallery.saveSelectedState(adjustments);
+    }, 1000);
+
   }, [
     wbRed, wbGreen, wbBlue,
     exposure, contrast, saturation,
@@ -107,7 +141,7 @@ const RawUploader = () => {
     lutData, lutSize, lutName,
     exportFormat,
     imageState,
-    saveAdjustments
+    gallery.selectedId
   ]);
 
   useEffect(() => {
@@ -117,8 +151,8 @@ const RawUploader = () => {
     };
   }, []);
 
+  // PWA Share Handling
   useEffect(() => {
-    // Check for shared target query param
     const checkSharedFile = async () => {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('shared_target') === 'true') {
@@ -126,18 +160,11 @@ const RawUploader = () => {
                 const db = await openDB('nitrate-grain-share', 1);
                 const file = await db.get('shared-files', 'latest-share');
 
-                if (file) {
-                    // Check if file is valid
-                    if (file instanceof Blob) {
-                        setSelectedFile(file);
-                        handleProcess(file);
-                    }
-
-                    // Clean up
+                if (file && file instanceof Blob) {
+                    const newId = await gallery.addPhotos([file]);
+                    if (newId) gallery.selectPhoto(newId);
                     await db.delete('shared-files', 'latest-share');
                 }
-
-                // Clean URL
                 const newUrl = window.location.pathname;
                 window.history.replaceState({}, document.title, newUrl);
             } catch (err) {
@@ -145,7 +172,6 @@ const RawUploader = () => {
             }
         }
     };
-
     checkSharedFile();
   }, []);
 
@@ -181,10 +207,6 @@ const RawUploader = () => {
   const handleProcess = async (fileToProcess, restoredAdjustments = null) => {
     if (!fileToProcess) return;
 
-    if (!restoredAdjustments) {
-       saveFile(fileToProcess);
-    }
-
     setLoading(true);
     setError(null);
     setImageState(null);
@@ -192,7 +214,6 @@ const RawUploader = () => {
 
     if (workerRef.current) {
         workerRef.current.terminate();
-        workerRef.current = null;
     }
 
     workerRef.current = new Worker(new URL('../workers/raw.worker.js', import.meta.url), { type: 'module' });
@@ -205,16 +226,16 @@ const RawUploader = () => {
 
         if (restoredAdjustments) {
             isRestoringRef.current = true;
-            setWbRed(restoredAdjustments.wbRed);
-            setWbGreen(restoredAdjustments.wbGreen);
-            setWbBlue(restoredAdjustments.wbBlue);
-            setHighlights(restoredAdjustments.highlights);
-            setShadows(restoredAdjustments.shadows);
-            setWhites(restoredAdjustments.whites);
-            setBlacks(restoredAdjustments.blacks);
-            setSaturation(restoredAdjustments.saturation);
-            setContrast(restoredAdjustments.contrast);
-            setExposure(restoredAdjustments.exposure);
+            setWbRed(restoredAdjustments.wbRed ?? 1.0);
+            setWbGreen(restoredAdjustments.wbGreen ?? 1.0);
+            setWbBlue(restoredAdjustments.wbBlue ?? 1.0);
+            setHighlights(restoredAdjustments.highlights ?? 0.0);
+            setShadows(restoredAdjustments.shadows ?? 0.0);
+            setWhites(restoredAdjustments.whites ?? 0.0);
+            setBlacks(restoredAdjustments.blacks ?? 0.0);
+            setSaturation(restoredAdjustments.saturation ?? 1.0);
+            setContrast(restoredAdjustments.contrast ?? 1.0);
+            setExposure(restoredAdjustments.exposure ?? 0.0);
             setMeteringMode(restoredAdjustments.meteringMode || 'hybrid');
             setInputGamma(restoredAdjustments.inputGamma || 1.0);
             setTargetLogSpace(restoredAdjustments.targetLogSpace || 'None');
@@ -224,17 +245,19 @@ const RawUploader = () => {
                 setLutData(restoredAdjustments.lutData);
                 setLutSize(restoredAdjustments.lutSize);
                 setLutName(restoredAdjustments.lutName);
+            } else {
+                setLutData(null);
+                setLutName(null);
+                setLutSize(null);
             }
         } else {
-            setWbRed(1.0);
-            setWbGreen(1.0);
-            setWbBlue(1.0);
-            setHighlights(0.0);
-            setShadows(0.0);
-            setWhites(0.0);
-            setBlacks(0.0);
-            setSaturation(1.0);
-            setContrast(1.0);
+            // Defaults
+            setWbRed(1.0); setWbGreen(1.0); setWbBlue(1.0);
+            setHighlights(0.0); setShadows(0.0);
+            setWhites(0.0); setBlacks(0.0);
+            setSaturation(1.0); setContrast(1.0);
+            // Exposure will be set by effect
+            setLutData(null); setLutName(null); setLutSize(null);
         }
 
         setImageState({
@@ -249,15 +272,13 @@ const RawUploader = () => {
       } else if (type === 'error') {
         setError(workerError);
         setLoading(false);
-        if (!restoredAdjustments) clearSession();
       }
     };
 
     workerRef.current.onerror = (err) => {
         console.error("Worker Crash:", err);
-        setError("Worker failed (Check console). The operation might have crashed.");
+        setError("Worker failed.");
         setLoading(false);
-        if (!restoredAdjustments) clearSession();
     };
 
     try {
@@ -272,7 +293,6 @@ const RawUploader = () => {
     } catch (err) {
       setError("Failed to read file: " + err.message);
       setLoading(false);
-      if (!restoredAdjustments) clearSession();
     }
   };
 
@@ -285,10 +305,8 @@ const RawUploader = () => {
               if (!result) throw new Error("Failed to capture WebGL data");
 
               const { width, height, data } = result;
+              if (exportWorkerRef.current) exportWorkerRef.current.terminate();
 
-              if (exportWorkerRef.current) {
-                  exportWorkerRef.current.terminate();
-              }
               exportWorkerRef.current = new Worker(new URL('../workers/export.worker.js', import.meta.url), { type: 'module' });
 
               exportWorkerRef.current.onmessage = (e) => {
@@ -315,12 +333,11 @@ const RawUploader = () => {
               };
 
               exportWorkerRef.current.onerror = (err) => {
-                  console.error("Export Worker Error:", err);
                   setError("Export Worker crashed.");
                   setExporting(false);
               };
 
-              exportWorkerRef.current.postMessage({
+               exportWorkerRef.current.postMessage({
                   width,
                   height,
                   data: data,
@@ -329,32 +346,19 @@ const RawUploader = () => {
                   format: exportFormat,
                   quality: 0.95
               }, [data.buffer]);
-
           } catch (err) {
-              console.error(err);
               setError("Export Error: " + err.message);
               setExporting(false);
           }
       }, 100);
   };
 
-  const handleFileSelect = (e) => {
-    if (e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
-      handleProcess(e.target.files[0]);
+  const handleFileSelect = async (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const firstId = await gallery.addPhotos(e.target.files);
+      if (firstId) gallery.selectPhoto(firstId);
+      e.target.value = '';
     }
-  };
-
-  const handleRemoveImage = () => {
-      setImageState(null);
-      setSelectedFile(null);
-      setMetadata(null);
-      // Reset critical pipeline state
-      setLutData(null);
-      setLutName(null);
-      clearSession();
-      // Reset file input value so same file can be selected again
-      if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleTriggerUpload = () => {
@@ -384,35 +388,13 @@ const RawUploader = () => {
   };
 
   // Reset Functions
-  const resetWB = () => {
-      setWbRed(1.0);
-      setWbGreen(1.0);
-      setWbBlue(1.0);
-  };
+  const resetWB = () => { setWbRed(1.0); setWbGreen(1.0); setWbBlue(1.0); };
+  const resetExposureSettings = () => { setExposure(0.0); setMeteringMode('hybrid'); };
+  const resetEnhancements = () => { setContrast(1.0); setSaturation(1.0); };
+  const resetTone = () => { setHighlights(0.0); setShadows(0.0); setWhites(0.0); setBlacks(0.0); };
+  const resetAdvanced = () => { setInputGamma(1.0); setImgStats(null); };
 
-  const resetExposureSettings = () => {
-      setExposure(0.0);
-      setMeteringMode('hybrid');
-  };
-
-  const resetEnhancements = () => {
-      setContrast(1.0);
-      setSaturation(1.0);
-  };
-
-  const resetTone = () => {
-      setHighlights(0.0);
-      setShadows(0.0);
-      setWhites(0.0);
-      setBlacks(0.0);
-  };
-
-  const resetAdvanced = () => {
-      setInputGamma(1.0);
-      setImgStats(null);
-  };
-
-  // Styled File Input Component
+  // File Input
   const FileInput = (
     <div className="flex flex-col items-center w-full">
         <label
@@ -433,18 +415,23 @@ const RawUploader = () => {
                 </div>
             </div>
         </label>
+        {gallery.error && (
+             <div className="mt-4 p-2 bg-red-100 text-red-600 rounded-lg text-sm">
+                 {gallery.error}
+             </div>
+        )}
     </div>
   );
 
   return (
     <>
-    {/* Hidden Input - Always rendered to preserve ref */}
     <input
         ref={fileInputRef}
         id="raw-upload-input"
         type="file"
         name="file_upload"
         className="hidden"
+        multiple
         accept=".ARW,.CR2,.CR3,.DNG,.NEF,.ORF,.RAF"
         onChange={handleFileSelect}
     />
@@ -453,6 +440,30 @@ const RawUploader = () => {
         loading={loading}
         error={error}
         exporting={exporting}
+        gallerySidebar={
+            <GallerySidebar
+                images={gallery.images}
+                selectedId={gallery.selectedId}
+                onSelect={gallery.selectPhoto}
+                onDelete={gallery.deletePhoto}
+                onAdd={handleTriggerUpload}
+                isProcessing={gallery.isProcessing}
+                isCollapsed={isGalleryCollapsed}
+                setIsCollapsed={setIsGalleryCollapsed}
+                showAddButton={!!gallery.selectedId} // Only show if image is selected (editing)
+            />
+        }
+        galleryGrid={
+            <GalleryGrid
+                images={gallery.images}
+                selectedId={gallery.selectedId}
+                onSelect={gallery.selectPhoto}
+                onDelete={gallery.deletePhoto}
+                onAdd={handleTriggerUpload}
+                isProcessing={gallery.isProcessing}
+                showAddButton={!!gallery.selectedId} // Only show if image is selected (editing)
+            />
+        }
         controls={{
             basic: <BasicControls
                 wbRed={wbRed} setWbRed={setWbRed}
@@ -481,6 +492,8 @@ const RawUploader = () => {
                 onImportLuts={importLuts}
                 onDeleteLut={deleteLut}
                 onApplyLut={handleApplyLut}
+                isLoading={lutLoading}
+                error={lutError}
             />,
             export: <ExportControls
                 exportFormat={exportFormat} setExportFormat={setExportFormat}
@@ -512,24 +525,6 @@ const RawUploader = () => {
                         </div>
                     </div>
                 )}
-
-                {/* Floating Action Buttons Overlay - Moved to bottom right to avoid header overlap */}
-                <div className="absolute bottom-6 right-6 z-50 flex gap-3 pointer-events-auto">
-                    <button
-                        onClick={handleTriggerUpload}
-                        className="p-3 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black/70 text-gray-700 dark:text-white rounded-full backdrop-blur-md transition-all shadow-xl border border-gray-200 dark:border-white/10 hover:scale-105 active:scale-95"
-                        title={t('actions.replace')}
-                    >
-                        <RefreshCw size={20} />
-                    </button>
-                    <button
-                        onClick={handleRemoveImage}
-                        className="p-3 bg-red-100 dark:bg-red-900/50 hover:bg-red-200 dark:hover:bg-red-900/70 text-red-600 dark:text-red-400 rounded-full backdrop-blur-md transition-all shadow-xl border border-red-200 dark:border-red-800/30 hover:scale-105 active:scale-95"
-                        title={t('actions.remove')}
-                    >
-                        <XCircle size={20} />
-                    </button>
-                </div>
 
                 <GLCanvas
                     ref={glCanvasRef}

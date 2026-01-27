@@ -73,5 +73,11 @@
     "replace": "Replace",
     "reset": "Reset",
     "original": "Original"
+  },
+  "gallery": {
+    "title": "Gallery",
+    "add": "Add",
+    "empty": "No images",
+    "limit": "Gallery Full"
   }
 }

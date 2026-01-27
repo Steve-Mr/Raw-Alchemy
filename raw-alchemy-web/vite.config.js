@@ -4,6 +4,11 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Force exclude libraw-wasm from optimization to ensure we get the latest code from node_modules
+  // and not a cached pre-bundled version (since version number 1.1.2 is same for both original and fork)
+  optimizeDeps: {
+    exclude: ['libraw-wasm']
+  },
   plugins: [
     react(),
     VitePWA({
@@ -66,7 +71,7 @@ export default defineConfig({
                 files: [
                     {
                         name: 'file',
-                        accept: ['image/*', 'application/octet-stream']
+                        accept: ['.dng', '.raf', '.cr2', '.arw', '.nef', '.orf', '.rw2', 'image/*', 'application/octet-stream']
                     }
                 ]
             }

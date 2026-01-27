@@ -6,7 +6,8 @@ import { Palette, Upload, X, Trash2, ChevronDown, Check } from 'lucide-react';
 const ColorControls = ({
   targetLogSpace, setTargetLogSpace,
   lutName, onRemoveLut,
-  luts = [], onImportLuts, onDeleteLut, onApplyLut
+  luts = [], onImportLuts, onDeleteLut, onApplyLut,
+  isLoading, error
 }) => {
   const { t } = useTranslation();
   const fileInputRef = useRef(null);
@@ -122,12 +123,23 @@ const ColorControls = ({
             {/* Import Button */}
             <button
                 onClick={handleUploadClick}
-                className="p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
+                disabled={isLoading}
+                className="p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-wait"
                 title="Import LUTs"
             >
-                <Upload size={20} />
+                {isLoading ? (
+                    <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                    <Upload size={20} />
+                )}
             </button>
         </div>
+
+        {error && (
+            <div className="mb-3 p-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs rounded-lg">
+                Error: {error.message || "Failed to load LUT"}
+            </div>
+        )}
 
         {/* Applied LUT Display */}
         {lutName && (
@@ -155,7 +167,7 @@ const ColorControls = ({
             id="lut-upload-input"
             name="lut_upload"
             type="file"
-            accept=".cube"
+            accept=".cube,text/plain"
             multiple
             onChange={handleFileChange}
             className="hidden"
