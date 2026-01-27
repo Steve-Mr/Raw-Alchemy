@@ -70,7 +70,8 @@ export const useGallery = () => {
             const isDuplicate = currentImages.some(img =>
                 img.name === file.name &&
                 img.size === file.size &&
-                img.lastModified === file.lastModified
+                // Relaxed date check: Only if both exist and match, OR if date is missing (common on mobile) ignore it and trust size/name
+                (!img.lastModified || !file.lastModified || img.lastModified === file.lastModified)
             );
             if (isDuplicate) {
                 duplicates.push(file.name);
