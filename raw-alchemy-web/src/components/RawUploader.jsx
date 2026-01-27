@@ -450,6 +450,7 @@ const RawUploader = () => {
                 isProcessing={gallery.isProcessing}
                 isCollapsed={isGalleryCollapsed}
                 setIsCollapsed={setIsGalleryCollapsed}
+                showAddButton={!!gallery.selectedId} // Only show if image is selected (editing)
             />
         }
         galleryGrid={

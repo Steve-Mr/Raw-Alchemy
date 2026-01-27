@@ -8,19 +8,20 @@ const GalleryGrid = ({
     onSelect,
     onDelete,
     onAdd,
-    isProcessing
+    isProcessing,
+    // showAddButton // Currently unused on mobile as we want consistent action availability
 }) => {
     const { t } = useTranslation();
 
     return (
         <div className="h-full flex flex-col p-4 bg-surface-light dark:bg-surface-dark">
              <div className="flex items-center justify-between mb-4">
-                 <h2 className="text-lg font-bold text-gray-900 dark:text-white">Gallery</h2>
+                 <h2 className="text-lg font-bold text-gray-900 dark:text-white">{t('gallery.title')}</h2>
                  <span className="text-xs text-gray-500">{images.length} / 15</span>
              </div>
 
              <div className="grid grid-cols-3 gap-3 overflow-y-auto pb-20 custom-scrollbar">
-                 {/* Add Button Tile */}
+                 {/* Add Button Tile - Always Visible on Mobile */}
                  <button
                     onClick={onAdd}
                     disabled={isProcessing}
@@ -31,7 +32,7 @@ const GalleryGrid = ({
                      ) : (
                          <>
                             <Plus size={24} className="text-gray-400" />
-                            <span className="text-xs font-medium text-gray-500">Add</span>
+                            <span className="text-xs font-medium text-gray-500">{t('gallery.add')}</span>
                          </>
                      )}
                  </button>
