@@ -59,7 +59,46 @@ export const useGallery = () => {
         setError(null);
         let firstAddedId = null;
 
+        // Get current images for duplicate detection
+        const currentImages = await storage.getImages();
         const fileList = Array.from(files);
+        const uniqueFiles = [];
+        const duplicates = [];
+
+        // Check for duplicates
+        fileList.forEach(file => {
+            const isDuplicate = currentImages.some(img =>
+                img.name === file.name &&
+                img.size === file.size &&
+                img.lastModified === file.lastModified
+            );
+            if (isDuplicate) {
+                duplicates.push(file.name);
+            } else {
+                uniqueFiles.push(file);
+            }
+        });
+
+        // Prompt if duplicates found
+        if (duplicates.length > 0) {
+            const message = `The following images appear to be duplicates:\n\n${duplicates.join('\n')}\n\nDo you want to upload them anyway?`;
+            if (window.confirm(message)) {
+                // User confirmed, process all files including duplicates
+                // (Or should we process uniqueFiles + duplicates? Logic implies we process original list)
+                // If user confirms, we usually want to allow the upload (creating a "copy").
+                // So we use fileList.
+                // If user cancels, we abort the WHOLE operation or just skip duplicates?
+                // Standard behavior: "Skip duplicates" vs "Cancel all".
+                // User request: "If user confirms still want to upload, then upload".
+                // This implies "Yes" -> Upload everything. "No" -> Cancel.
+            } else {
+                setIsProcessing(false);
+                return null;
+            }
+        }
+
+        // Process files (either unique list or full list if confirmed)
+        // Actually, if I upload the exact same file again, IndexedDB might allow it with a new UUID.
 
         for (const file of fileList) {
              try {

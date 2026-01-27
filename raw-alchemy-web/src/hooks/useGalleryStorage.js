@@ -45,6 +45,8 @@ export const useGalleryStorage = () => {
     await tx.objectStore(META_STORE).add({
       id,
       name: file.name,
+      size: file.size, // For duplicate detection
+      lastModified: file.lastModified, // For duplicate detection
       date: Date.now(),
       thumbnail: thumbnailData // Blob or DataURL
     });
