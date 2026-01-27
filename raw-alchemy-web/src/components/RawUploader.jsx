@@ -90,6 +90,7 @@ const RawUploader = () => {
   const batchCanvasRef = useRef(null);
   const batchWorkerRef = useRef(null);
   const batchExportWorkerRef = useRef(null);
+  const batchRenderResolverRef = useRef(null);
 
   const [selectedFile, setSelectedFile] = useState(null);
   const [imgStats, setImgStats] = useState(null);
@@ -480,7 +481,10 @@ const RawUploader = () => {
                       bitDepth: decoded.bitDepth
                   });
 
-                  await new Promise(r => setTimeout(r, 200));
+                  // Wait for GLCanvas to render via callback
+                  await new Promise(resolve => {
+                      batchRenderResolverRef.current = resolve;
+                  });
 
                   if (!batchCanvasRef.current) throw new Error("Batch Canvas not ready");
                   const result = batchCanvasRef.current.captureHighRes();
@@ -789,6 +793,12 @@ const RawUploader = () => {
                 inputGamma={batchAdjustments.inputGamma}
                 lutData={batchAdjustments.lutData}
                 lutSize={batchAdjustments.lutSize}
+                onRender={() => {
+                    if (batchRenderResolverRef.current) {
+                        batchRenderResolverRef.current();
+                        batchRenderResolverRef.current = null;
+                    }
+                }}
             />
         )}
     </div>
