@@ -27,7 +27,9 @@ test.describe('Gallery Upload', () => {
 
     // Verify images appear in the gallery
     // In Desktop mode, GallerySidebar renders the file names
-    await expect(page.getByText('test1.ARW')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('test2.ARW')).toBeVisible({ timeout: 10000 });
+    await Promise.all([
+      expect(page.getByText('test1.ARW')).toBeVisible({ timeout: 10000 }),
+      expect(page.getByText('test2.ARW')).toBeVisible({ timeout: 10000 })
+    ]);
   });
 });
