@@ -1,10 +1,11 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Download, FileImage, Check } from 'lucide-react';
+import { Download, FileImage, Check, Layers } from 'lucide-react';
 
 const ExportControls = ({
   exportFormat, setExportFormat,
-  handleExport, exporting
+  handleExport, exporting,
+  onBatchExport
 }) => {
   const { t } = useTranslation();
 
@@ -59,6 +60,15 @@ const ExportControls = ({
                 {t('export.button')}
             </>
         )}
+      </button>
+
+      <button
+        onClick={onBatchExport}
+        disabled={exporting}
+        className="mt-3 w-full py-3 px-4 rounded-xl font-bold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 border border-transparent dark:border-gray-700"
+      >
+        <Layers size={18} />
+        {t('export.batch_button')}
       </button>
     </div>
   );

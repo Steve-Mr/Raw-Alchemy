@@ -16,6 +16,7 @@ import ToneControls from './controls/ToneControls';
 import ColorControls from './controls/ColorControls';
 import ExportControls from './controls/ExportControls';
 import AdvancedControls from './controls/AdvancedControls';
+import BatchExportModal from './modals/BatchExportModal';
 import { UploadCloud, History } from 'lucide-react';
 
 const RawUploader = () => {
@@ -62,9 +63,36 @@ const RawUploader = () => {
 
   const [exporting, setExporting] = useState(false);
 
+  // Batch Export State
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [batchProcessing, setBatchProcessing] = useState(false);
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
+
+  // Hidden Batch Canvas State
+  const [batchImageState, setBatchImageState] = useState(null);
+  const [batchAdjustments, setBatchAdjustments] = useState({
+      wbRed: 1.0, wbGreen: 1.0, wbBlue: 1.0,
+      exposure: 0.0, contrast: 1.0, saturation: 1.0,
+      highlights: 0.0, shadows: 0.0, whites: 0.0, blacks: 0.0,
+      inputGamma: 1.0,
+      lutData: null, lutSize: null,
+      targetLogSpace: 'None'
+  });
+  const [batchMatrices, setBatchMatrices] = useState({
+      camToProPhoto: null,
+      proPhotoToTarget: null
+  });
+  const [batchRenderId, setBatchRenderId] = useState(null);
+
   const glCanvasRef = useRef(null);
   const workerRef = useRef(null);
   const exportWorkerRef = useRef(null);
+
+  const batchCanvasRef = useRef(null);
+  const batchWorkerRef = useRef(null);
+  const batchExportWorkerRef = useRef(null);
+  const batchRenderResolverRef = useRef(null);
+
   const [selectedFile, setSelectedFile] = useState(null);
   const [imgStats, setImgStats] = useState(null);
 
@@ -89,8 +117,26 @@ const RawUploader = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Handle Gallery Selection Change
+  // Refs for safe state persistence
+  const currentAdjustmentsRef = useRef(null);
+  const lastSelectedIdRef = useRef(null);
+
+  // Handle Gallery Selection Change (Save Previous & Load New)
   useEffect(() => {
+    // 1. Save Previous Image State (Immediate)
+    if (lastSelectedIdRef.current && lastSelectedIdRef.current !== gallery.selectedId) {
+        if (currentAdjustmentsRef.current) {
+            gallery.saveState(lastSelectedIdRef.current, currentAdjustmentsRef.current);
+        }
+        // Cancel pending debounced save to prevent overwriting with stale data
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+            saveTimeoutRef.current = null;
+        }
+    }
+    lastSelectedIdRef.current = gallery.selectedId;
+
+    // 2. Load New Image
     const loadSelectedImage = async () => {
         if (!gallery.selectedId) {
             // Clear canvas if no selection
@@ -109,12 +155,28 @@ const RawUploader = () => {
         }
     };
 
+    // Synchronously reset state to defaults to prevent UI flickering/leaking old state
+    // while the new image loads asynchronously.
+    setWbRed(1.0); setWbGreen(1.0); setWbBlue(1.0);
+    setHighlights(0.0); setShadows(0.0);
+    setWhites(0.0); setBlacks(0.0);
+    setSaturation(1.0); setContrast(1.0);
+    setExposure(0.0); setInitialExposure(0.0);
+    setMeteringMode('hybrid');
+    setInputGamma(1.0);
+    setTargetLogSpace('None');
+    setExportFormat('tiff');
+    setLutData(null); setLutName(null); setLutSize(null);
+    setImageState(null); // Clear previous image state immediately
+
     loadSelectedImage();
   }, [gallery.selectedId]);
 
   // Save Adjustments Debounced
   useEffect(() => {
-    if (!imageState || !gallery.selectedId) return;
+    // Note: gallery.selectedId is EXCLUDED from dependencies to prevent
+    // saving Photo A's state to Photo B during transition race conditions.
+    if (!imageState) return;
 
     const adjustments = {
       wbRed, wbGreen, wbBlue,
@@ -126,11 +188,16 @@ const RawUploader = () => {
       exportFormat
     };
 
-    // Debounce save
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(() => {
-        gallery.saveSelectedState(adjustments);
-    }, 1000);
+    // Keep ref updated for immediate save on switch
+    currentAdjustmentsRef.current = adjustments;
+
+    // Debounce save for current image
+    if (gallery.selectedId) {
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(() => {
+            gallery.saveSelectedState(adjustments);
+        }, 1000);
+    }
 
   }, [
     wbRed, wbGreen, wbBlue,
@@ -140,14 +207,15 @@ const RawUploader = () => {
     targetLogSpace,
     lutData, lutSize, lutName,
     exportFormat,
-    imageState,
-    gallery.selectedId
+    imageState
   ]);
 
   useEffect(() => {
     return () => {
       workerRef.current?.terminate();
       exportWorkerRef.current?.terminate();
+      batchWorkerRef.current?.terminate();
+      batchExportWorkerRef.current?.terminate();
     };
   }, []);
 
@@ -353,6 +421,191 @@ const RawUploader = () => {
       }, 100);
   };
 
+  const handleBatchExportClick = () => {
+      setIsBatchModalOpen(true);
+  };
+
+  const runBatchExport = async (selectedIds, removeAfter) => {
+      setBatchProcessing(true);
+      setBatchProgress({ current: 0, total: selectedIds.length });
+
+      let dirHandle = null;
+      let zip = null;
+      const useFileSystem = 'showDirectoryPicker' in window;
+
+      try {
+          if (useFileSystem) {
+               try {
+                   dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+               } catch (e) {
+                   setBatchProcessing(false);
+                   return;
+               }
+          } else {
+               const JSZipModule = await import('jszip');
+               zip = new JSZipModule.default();
+          }
+
+          if (batchWorkerRef.current) batchWorkerRef.current.terminate();
+          batchWorkerRef.current = new Worker(new URL('../workers/raw.worker.js', import.meta.url), { type: 'module' });
+
+          if (batchExportWorkerRef.current) batchExportWorkerRef.current.terminate();
+          batchExportWorkerRef.current = new Worker(new URL('../workers/export.worker.js', import.meta.url), { type: 'module' });
+
+          let successCount = 0;
+          const processedIds = [];
+
+          for (let i = 0; i < selectedIds.length; i++) {
+              const id = selectedIds[i];
+              setBatchProgress({ current: i + 1, total: selectedIds.length });
+
+              try {
+                  const file = await gallery.getFile(id);
+                  const state = await gallery.getState(id);
+
+                  if (!file) continue;
+
+                  const decoded = await new Promise((resolve, reject) => {
+                       const worker = batchWorkerRef.current;
+                       const msgId = Date.now();
+                       const handler = (e) => {
+                           if (e.data.id === msgId || (e.data.type === 'error' && e.data.error)) {
+                               worker.removeEventListener('message', handler);
+                               if (e.data.type === 'success') resolve(e.data);
+                               else reject(e.data.error);
+                           }
+                       };
+                       worker.addEventListener('message', handler);
+                       file.arrayBuffer().then(buf => {
+                           worker.postMessage({ command: 'decode', fileBuffer: buf, mode: 'rgb', id: msgId }, [buf]);
+                       }).catch(reject);
+                  });
+
+                  const adjustments = {
+                      wbRed: state?.wbRed ?? 1.0,
+                      wbGreen: state?.wbGreen ?? 1.0,
+                      wbBlue: state?.wbBlue ?? 1.0,
+                      exposure: state?.exposure ?? 0.0,
+                      contrast: state?.contrast ?? 1.0,
+                      saturation: state?.saturation ?? 1.0,
+                      highlights: state?.highlights ?? 0.0,
+                      shadows: state?.shadows ?? 0.0,
+                      whites: state?.whites ?? 0.0,
+                      blacks: state?.blacks ?? 0.0,
+                      inputGamma: state?.inputGamma ?? 1.0,
+                      lutData: state?.lutData ?? null,
+                      lutSize: state?.lutSize ?? null,
+                      targetLogSpace: state?.targetLogSpace ?? 'None'
+                  };
+
+                  if (!state) {
+                       adjustments.exposure = calculateAutoExposure(
+                           decoded.data, decoded.width, decoded.height, 'hybrid', decoded.bitDepth
+                       );
+                  }
+
+                  const c2p = [1,0,0, 0,1,0, 0,0,1];
+                  const p2t = getProPhotoToTargetMatrix(adjustments.targetLogSpace);
+
+                  setBatchMatrices({
+                      camToProPhoto: formatMatrixForUniform(c2p),
+                      proPhotoToTarget: formatMatrixForUniform(p2t)
+                  });
+                  setBatchAdjustments(adjustments);
+                  setBatchImageState({
+                      data: decoded.data,
+                      width: decoded.width,
+                      height: decoded.height,
+                      channels: decoded.channels,
+                      bitDepth: decoded.bitDepth
+                  });
+
+                  const currentRenderId = Date.now();
+                  setBatchRenderId(currentRenderId);
+
+                  // Wait for GLCanvas to render via callback
+                  await new Promise(resolve => {
+                      batchRenderResolverRef.current = { resolve, id: currentRenderId };
+                  });
+
+                  if (!batchCanvasRef.current) throw new Error("Batch Canvas not ready");
+                  const result = batchCanvasRef.current.captureHighRes();
+                  if (!result) throw new Error("Failed to capture");
+
+                  const exportedBlob = await new Promise((resolve, reject) => {
+                       const worker = batchExportWorkerRef.current;
+                       const handler = (e) => {
+                           worker.removeEventListener('message', handler);
+                           if (e.data.type === 'success') {
+                               const mime = exportFormat === 'tiff' ? 'image/tiff' : `image/${exportFormat}`;
+                               resolve(new Blob([e.data.buffer], { type: mime }));
+                           }
+                           else reject(e.data.message);
+                       };
+                       worker.addEventListener('message', handler);
+                       worker.postMessage({
+                          width: result.width,
+                          height: result.height,
+                          data: result.data,
+                          channels: 4,
+                          logSpace: adjustments.targetLogSpace,
+                          format: exportFormat,
+                          quality: 0.95
+                       }, [result.data.buffer]);
+                  });
+
+                  // Robust filename generation
+                  const baseName = file.name.replace(/\.[^/.]+$/, "");
+                  const logSuffix = adjustments.targetLogSpace === 'None' ? '' : `_${adjustments.targetLogSpace.replace(/\s+/g, '-')}`;
+                  const ext = exportFormat === 'tiff' ? 'tiff' : exportFormat === 'jpeg' ? 'jpg' : exportFormat;
+                  // Sanitize filename for compatibility
+                  const safeName = `${baseName}${logSuffix}`.replace(/[^a-z0-9_\-\.]/gi, '_');
+                  const filename = `${safeName}.${ext}`;
+
+                  if (useFileSystem && dirHandle) {
+                      const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+                      const writable = await fileHandle.createWritable();
+                      await writable.write(exportedBlob);
+                      await writable.close();
+                  } else if (zip) {
+                      zip.file(filename, exportedBlob);
+                  }
+
+                  successCount++;
+                  processedIds.push(id);
+
+              } catch (err) {
+                  console.error(`Error exporting ${id}:`, err);
+              }
+          }
+
+          if (zip && successCount > 0) {
+              const content = await zip.generateAsync({ type: "blob" });
+              const a = document.createElement("a");
+              a.href = URL.createObjectURL(content);
+              a.download = "batch_export.zip";
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(a.href);
+          }
+
+          setBatchProcessing(false);
+          setIsBatchModalOpen(false);
+
+          if (removeAfter && successCount > 0) {
+             if (window.confirm(t('export.delete_confirm', { count: successCount }))) {
+                 for (const id of processedIds) {
+                     await gallery.deletePhoto(id);
+                 }
+             }
+          }
+      } catch (e) {
+          console.error("Batch Export Setup Error:", e);
+          setBatchProcessing(false);
+      }
+  };
+
   const handleFileSelect = async (e) => {
     if (e.target.files && e.target.files.length > 0) {
       const firstId = await gallery.addPhotos(e.target.files);
@@ -498,6 +751,7 @@ const RawUploader = () => {
             export: <ExportControls
                 exportFormat={exportFormat} setExportFormat={setExportFormat}
                 handleExport={handleExport} exporting={exporting}
+                onBatchExport={handleBatchExportClick}
             />,
             advanced: <AdvancedControls
                 inputGamma={inputGamma} setInputGamma={setInputGamma}
@@ -551,6 +805,49 @@ const RawUploader = () => {
             </div>
         )}
     </ResponsiveLayout>
+
+    <BatchExportModal
+        isOpen={isBatchModalOpen}
+        onClose={() => setIsBatchModalOpen(false)}
+        images={gallery.images}
+        onExport={runBatchExport}
+        isProcessing={batchProcessing}
+        progress={batchProgress}
+    />
+
+    <div style={{ position: 'absolute', top: '-10000px', left: '-10000px', visibility: 'hidden' }}>
+        {batchImageState && (
+            <GLCanvas
+                ref={batchCanvasRef}
+                width={batchImageState.width}
+                height={batchImageState.height}
+                data={batchImageState.data}
+                channels={batchImageState.channels}
+                bitDepth={batchImageState.bitDepth}
+                wbMultipliers={[batchAdjustments.wbRed, batchAdjustments.wbGreen, batchAdjustments.wbBlue]}
+                camToProPhotoMatrix={batchMatrices.camToProPhoto}
+                proPhotoToTargetMatrix={batchMatrices.proPhotoToTarget}
+                logCurveType={LOG_SPACE_CONFIG[batchAdjustments.targetLogSpace] ? LOG_SPACE_CONFIG[batchAdjustments.targetLogSpace].id : 0}
+                exposure={batchAdjustments.exposure}
+                saturation={batchAdjustments.saturation}
+                contrast={batchAdjustments.contrast}
+                highlights={batchAdjustments.highlights}
+                shadows={batchAdjustments.shadows}
+                whites={batchAdjustments.whites}
+                blacks={batchAdjustments.blacks}
+                inputGamma={batchAdjustments.inputGamma}
+                lutData={batchAdjustments.lutData}
+                lutSize={batchAdjustments.lutSize}
+                renderId={batchRenderId}
+                onRender={(renderedId) => {
+                    if (batchRenderResolverRef.current && batchRenderResolverRef.current.id === renderedId) {
+                        batchRenderResolverRef.current.resolve();
+                        batchRenderResolverRef.current = null;
+                    }
+                }}
+            />
+        )}
+    </div>
     </>
   );
 };
