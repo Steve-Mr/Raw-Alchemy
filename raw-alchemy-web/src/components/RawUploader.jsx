@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { openDB } from 'idb';
 import GLCanvas from './GLCanvas';
@@ -614,11 +614,11 @@ const RawUploader = () => {
     }
   };
 
-  const handleTriggerUpload = () => {
+  const handleTriggerUpload = useCallback(() => {
       if (fileInputRef.current) {
           fileInputRef.current.click();
       }
-  };
+  }, []);
 
   const handleApplyLut = (lut) => {
       if (!lut) return;

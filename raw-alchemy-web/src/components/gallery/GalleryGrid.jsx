@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Plus, Trash2, Image as ImageIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import Thumbnail from './Thumbnail';
 
-const GalleryGrid = ({
+const GalleryGrid = memo(({
     images,
     selectedId,
     onSelect,
@@ -55,11 +56,10 @@ const GalleryGrid = ({
                             onClick={() => onSelect(img.id)}
                          >
                              {img.thumbnail ? (
-                                 <img
-                                    src={URL.createObjectURL(img.thumbnail)}
+                                 <Thumbnail
+                                    blob={img.thumbnail}
                                     alt={img.name}
                                     className="w-full h-full object-cover"
-                                    onLoad={(e) => URL.revokeObjectURL(e.target.src)}
                                  />
                              ) : (
                                  <div className="w-full h-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center text-gray-400">
@@ -84,6 +84,6 @@ const GalleryGrid = ({
              )}
         </div>
     );
-};
+});
 
 export default GalleryGrid;
