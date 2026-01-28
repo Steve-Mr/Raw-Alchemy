@@ -116,8 +116,26 @@ const RawUploader = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Handle Gallery Selection Change
+  // Refs for safe state persistence
+  const currentAdjustmentsRef = useRef(null);
+  const lastSelectedIdRef = useRef(null);
+
+  // Handle Gallery Selection Change (Save Previous & Load New)
   useEffect(() => {
+    // 1. Save Previous Image State (Immediate)
+    if (lastSelectedIdRef.current && lastSelectedIdRef.current !== gallery.selectedId) {
+        if (currentAdjustmentsRef.current) {
+            gallery.saveState(lastSelectedIdRef.current, currentAdjustmentsRef.current);
+        }
+        // Cancel pending debounced save to prevent overwriting with stale data
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+            saveTimeoutRef.current = null;
+        }
+    }
+    lastSelectedIdRef.current = gallery.selectedId;
+
+    // 2. Load New Image
     const loadSelectedImage = async () => {
         if (!gallery.selectedId) {
             // Clear canvas if no selection
@@ -141,7 +159,9 @@ const RawUploader = () => {
 
   // Save Adjustments Debounced
   useEffect(() => {
-    if (!imageState || !gallery.selectedId) return;
+    // Note: gallery.selectedId is EXCLUDED from dependencies to prevent
+    // saving Photo A's state to Photo B during transition race conditions.
+    if (!imageState) return;
 
     const adjustments = {
       wbRed, wbGreen, wbBlue,
@@ -153,11 +173,16 @@ const RawUploader = () => {
       exportFormat
     };
 
-    // Debounce save
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(() => {
-        gallery.saveSelectedState(adjustments);
-    }, 1000);
+    // Keep ref updated for immediate save on switch
+    currentAdjustmentsRef.current = adjustments;
+
+    // Debounce save for current image
+    if (gallery.selectedId) {
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(() => {
+            gallery.saveSelectedState(adjustments);
+        }, 1000);
+    }
 
   }, [
     wbRed, wbGreen, wbBlue,
@@ -167,8 +192,7 @@ const RawUploader = () => {
     targetLogSpace,
     lutData, lutSize, lutName,
     exportFormat,
-    imageState,
-    gallery.selectedId
+    imageState
   ]);
 
   useEffect(() => {
