@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useGalleryStorage } from './useGalleryStorage';
+import { validateFile } from '../utils/validation';
 
 export const useGallery = () => {
     const storage = useGalleryStorage();
@@ -103,6 +104,14 @@ export const useGallery = () => {
 
         for (const file of fileList) {
              try {
+                 // Validate file
+                 const validation = validateFile(file);
+                 if (!validation.valid) {
+                     console.warn("Validation failed:", validation.error);
+                     setError(validation.error);
+                     continue;
+                 }
+
                  const id = crypto.randomUUID();
 
                  // 1. Get Thumbnail
