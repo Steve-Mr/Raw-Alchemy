@@ -609,10 +609,17 @@ const RawUploader = () => {
   };
 
   const handleFileSelect = async (e) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const firstId = await gallery.addPhotos(e.target.files);
-      if (firstId) gallery.selectPhoto(firstId);
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length > 0) {
+      // Immediate reset to allow browser UI to close/unblock
       e.target.value = '';
+
+      try {
+          const firstId = await gallery.addPhotos(files);
+          if (firstId) gallery.selectPhoto(firstId);
+      } catch (err) {
+          console.error("Import failed:", err);
+      }
     }
   };
 
@@ -685,7 +692,7 @@ const RawUploader = () => {
         id="raw-upload-input"
         type="file"
         name="file_upload"
-        className="hidden"
+        className="fixed top-0 left-0 w-px h-px opacity-0 overflow-hidden -z-10 pointer-events-none"
         multiple
         accept=".ARW,.CR2,.CR3,.DNG,.NEF,.ORF,.RAF"
         onChange={handleFileSelect}
