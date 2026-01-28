@@ -140,6 +140,8 @@ const RawUploader = () => {
     const loadSelectedImage = async () => {
         if (!gallery.selectedId) {
             // Clear canvas if no selection
+            workerRef.current?.terminate();
+            setLoading(false);
             setImageState(null);
             setSelectedFile(null);
             setMetadata(null);
