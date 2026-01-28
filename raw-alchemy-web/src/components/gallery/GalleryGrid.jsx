@@ -27,7 +27,7 @@ const GalleryGrid = memo(({
                      <span className="text-sm font-medium">{t('gallery.empty')}</span>
                  </div>
              ) : (
-                 <div className="flex-1 overflow-y-auto min-h-0 pb-20 custom-scrollbar" id="gallery-grid-container">
+                 <div className="flex-1 overflow-y-auto min-h-0 pb-20 custom-scrollbar p-1" id="gallery-grid-container">
                      <div className="grid grid-cols-3 gap-3">
                          {images.map(img => (
                              <div
