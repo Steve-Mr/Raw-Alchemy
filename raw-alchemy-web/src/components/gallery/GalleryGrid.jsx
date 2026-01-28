@@ -27,25 +27,7 @@ const GalleryGrid = memo(({
                      <span className="text-sm font-medium">{t('gallery.empty')}</span>
                  </div>
              ) : (
-                 <div className="grid grid-cols-3 gap-3 overflow-y-auto pb-20 custom-scrollbar">
-                     {/* Add Button Tile */}
-                     {showAddButton && (
-                         <button
-                            onClick={onAdd}
-                            disabled={isProcessing}
-                            className="aspect-square rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700 flex flex-col items-center justify-center gap-2 hover:border-primary-light dark:hover:border-primary-dark hover:bg-gray-50 dark:hover:bg-white/5 transition-all"
-                         >
-                             {isProcessing ? (
-                                 <div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-                             ) : (
-                                 <>
-                                    <Plus size={24} className="text-gray-400" />
-                                    <span className="text-xs font-medium text-gray-500">{t('gallery.add')}</span>
-                                 </>
-                             )}
-                         </button>
-                     )}
-
+                 <div className="grid grid-cols-3 gap-3 overflow-y-auto pb-20 custom-scrollbar flex-1 min-h-0">
                      {images.map(img => (
                          <div
                             key={img.id}
@@ -80,6 +62,24 @@ const GalleryGrid = memo(({
                              )}
                          </div>
                      ))}
+
+                     {/* Add Button Tile - Moved to End */}
+                     {showAddButton && (
+                         <button
+                            onClick={onAdd}
+                            disabled={isProcessing}
+                            className="aspect-square rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700 flex flex-col items-center justify-center gap-2 hover:border-primary-light dark:hover:border-primary-dark hover:bg-gray-50 dark:hover:bg-white/5 transition-all"
+                         >
+                             {isProcessing ? (
+                                 <div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                             ) : (
+                                 <>
+                                    <Plus size={24} className="text-gray-400" />
+                                    <span className="text-xs font-medium text-gray-500">{t('gallery.add')}</span>
+                                 </>
+                             )}
+                         </button>
+                     )}
                  </div>
              )}
         </div>

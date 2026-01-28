@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Minus, Plus } from 'lucide-react';
 
 const PrecisionSlider = ({
@@ -9,6 +9,16 @@ const PrecisionSlider = ({
   step,
   className = ""
 }) => {
+  const [localValue, setLocalValue] = useState(value);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Sync local state with prop when not dragging
+  useEffect(() => {
+    if (!isDragging) {
+      setLocalValue(value);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
 
   const handleDecrement = () => {
     const newValue = Math.max(min, value - step);
@@ -19,6 +29,15 @@ const PrecisionSlider = ({
     const newValue = Math.min(max, value + step);
     onChange(parseFloat(newValue.toFixed(5)));
   };
+
+  const handleSliderChange = (e) => {
+    const newValue = parseFloat(e.target.value);
+    setLocalValue(newValue);
+    onChange(newValue);
+  };
+
+  const handleDragStart = () => setIsDragging(true);
+  const handleDragEnd = () => setIsDragging(false);
 
   return (
     <div className={`flex items-center gap-3 ${className}`}>
@@ -38,8 +57,12 @@ const PrecisionSlider = ({
             min={min}
             max={max}
             step={step}
-            value={value}
-            onChange={(e) => onChange(parseFloat(e.target.value))}
+            value={localValue}
+            onChange={handleSliderChange}
+            onPointerDown={handleDragStart}
+            onPointerUp={handleDragEnd}
+            onTouchStart={handleDragStart}
+            onTouchEnd={handleDragEnd}
             className="w-full h-1.5 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-light/50"
         />
       </div>
