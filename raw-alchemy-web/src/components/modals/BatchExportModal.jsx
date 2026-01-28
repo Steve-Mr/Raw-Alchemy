@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Check, CheckSquare, Square } from 'lucide-react';
+import { X, Check, SquareCheck, Square } from 'lucide-react';
 
 const BatchExportModal = ({
     isOpen,
@@ -99,7 +99,7 @@ const BatchExportModal = ({
                                     className="flex items-center gap-2 text-sm font-medium text-primary-light dark:text-primary-dark hover:underline"
                                 >
                                     {selectedIds.size === images.length ? (
-                                        <><CheckSquare size={16} /> {t('export.deselect_all')}</>
+                                        <><SquareCheck size={16} /> {t('export.deselect_all')}</>
                                     ) : (
                                         <><Square size={16} /> {t('export.select_all')}</>
                                     )}
