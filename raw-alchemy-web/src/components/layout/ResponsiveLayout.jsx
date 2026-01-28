@@ -102,7 +102,7 @@ const ResponsiveLayout = ({
 
         {/* Middle: Controls/Gallery Content */}
         <div className="h-[45vh] bg-surface-light dark:bg-surface-dark flex flex-col border-t border-border-light dark:border-border-dark relative z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.1)]">
-            <div className="flex-1 overflow-y-auto custom-scrollbar">
+            <div className={`flex-1 ${activeTab === 'gallery' ? 'overflow-hidden' : 'overflow-y-auto custom-scrollbar'}`}>
                 <div className={activeTab === 'gallery' ? 'h-full' : 'p-5'}>
                     <AnimatePresence mode="wait">
                         <motion.div
