@@ -13,14 +13,16 @@ const BatchExportModal = ({
     const { t } = useTranslation();
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [removeAfter, setRemoveAfter] = useState(false);
+    const prevIsOpenRef = React.useRef(false);
 
     // Reset selection when modal opens
     useEffect(() => {
-        if (isOpen) {
+        if (isOpen && !prevIsOpenRef.current) {
             // Default select all
             setSelectedIds(new Set(images.map(img => img.id)));
             setRemoveAfter(false);
         }
+        prevIsOpenRef.current = isOpen;
     }, [isOpen, images]);
 
     // Prevent body scroll when modal is open

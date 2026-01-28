@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 
-const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, exposure, saturation, contrast, highlights, shadows, whites, blacks, inputGamma, lutData, lutSize, onRender }, ref) => {
+const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, exposure, saturation, contrast, highlights, shadows, whites, blacks, inputGamma, lutData, lutSize, onRender, renderId }, ref) => {
   const canvasRef = useRef(null);
 
   // Persist GL resources across renders
@@ -683,7 +683,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
 
         if (onRender) {
              // Use requestAnimationFrame to ensure the draw call has been committed
-             requestAnimationFrame(() => onRender());
+             requestAnimationFrame(() => onRender(renderId));
         }
 
     } catch (e) {
@@ -707,7 +707,7 @@ const GLCanvas = forwardRef(({ width, height, data, channels, bitDepth, wbMultip
         vaoRef.current = null;
     };
 
-  }, [width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, exposure, saturation, contrast, highlights, shadows, whites, blacks, inputGamma, lutData, lutSize, onRender]);
+  }, [width, height, data, channels, bitDepth, wbMultipliers, camToProPhotoMatrix, proPhotoToTargetMatrix, logCurveType, exposure, saturation, contrast, highlights, shadows, whites, blacks, inputGamma, lutData, lutSize, onRender, renderId]);
 
   // Use max-h-full to ensure vertical images don't overflow the container
   // Remove border/shadow here as the parent container handles the frame

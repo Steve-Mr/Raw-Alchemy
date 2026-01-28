@@ -82,6 +82,7 @@ const RawUploader = () => {
       camToProPhoto: null,
       proPhotoToTarget: null
   });
+  const [batchRenderId, setBatchRenderId] = useState(null);
 
   const glCanvasRef = useRef(null);
   const workerRef = useRef(null);
@@ -519,9 +520,12 @@ const RawUploader = () => {
                       bitDepth: decoded.bitDepth
                   });
 
+                  const currentRenderId = Date.now();
+                  setBatchRenderId(currentRenderId);
+
                   // Wait for GLCanvas to render via callback
                   await new Promise(resolve => {
-                      batchRenderResolverRef.current = resolve;
+                      batchRenderResolverRef.current = { resolve, id: currentRenderId };
                   });
 
                   if (!batchCanvasRef.current) throw new Error("Batch Canvas not ready");
@@ -834,9 +838,10 @@ const RawUploader = () => {
                 inputGamma={batchAdjustments.inputGamma}
                 lutData={batchAdjustments.lutData}
                 lutSize={batchAdjustments.lutSize}
-                onRender={() => {
-                    if (batchRenderResolverRef.current) {
-                        batchRenderResolverRef.current();
+                renderId={batchRenderId}
+                onRender={(renderedId) => {
+                    if (batchRenderResolverRef.current && batchRenderResolverRef.current.id === renderedId) {
+                        batchRenderResolverRef.current.resolve();
                         batchRenderResolverRef.current = null;
                     }
                 }}
