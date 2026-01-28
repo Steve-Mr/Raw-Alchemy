@@ -17,8 +17,7 @@ const PrecisionSlider = ({
     if (!isDragging) {
       setLocalValue(value);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
+  }, [value, isDragging]);
 
   const handleDecrement = () => {
     const newValue = Math.max(min, value - step);
