@@ -58,11 +58,12 @@ export const useGallery = () => {
     const addPhotos = useCallback(async (files) => {
         setIsProcessing(true);
         setError(null);
+        // Convert FileList to Array immediately to avoid invalidation across async boundaries (Firefox fix)
+        const fileList = Array.from(files);
         let firstAddedId = null;
 
         // Get current images for duplicate detection
         const currentImages = await storage.getImages();
-        const fileList = Array.from(files);
         const uniqueFiles = [];
         const duplicates = [];
 
