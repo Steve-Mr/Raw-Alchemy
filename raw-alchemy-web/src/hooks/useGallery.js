@@ -26,7 +26,7 @@ export const useGallery = () => {
         refreshImages();
     }, [refreshImages]);
 
-    const extractThumbnail = (file) => {
+    const extractThumbnail = useCallback((file) => {
         return new Promise((resolve, reject) => {
             const worker = workerRef.current;
             const msgId = Math.random().toString(36).substring(7);
@@ -52,9 +52,9 @@ export const useGallery = () => {
                 }, [buffer]);
             }).catch(reject);
         });
-    };
+    }, []);
 
-    const addPhotos = async (files) => {
+    const addPhotos = useCallback(async (files) => {
         setIsProcessing(true);
         setError(null);
         let firstAddedId = null;
@@ -85,21 +85,11 @@ export const useGallery = () => {
             const message = `The following images appear to be duplicates:\n\n${duplicates.join('\n')}\n\nDo you want to upload them anyway?`;
             if (window.confirm(message)) {
                 // User confirmed, process all files including duplicates
-                // (Or should we process uniqueFiles + duplicates? Logic implies we process original list)
-                // If user confirms, we usually want to allow the upload (creating a "copy").
-                // So we use fileList.
-                // If user cancels, we abort the WHOLE operation or just skip duplicates?
-                // Standard behavior: "Skip duplicates" vs "Cancel all".
-                // User request: "If user confirms still want to upload, then upload".
-                // This implies "Yes" -> Upload everything. "No" -> Cancel.
             } else {
                 setIsProcessing(false);
                 return null;
             }
         }
-
-        // Process files (either unique list or full list if confirmed)
-        // Actually, if I upload the exact same file again, IndexedDB might allow it with a new UUID.
 
         for (const file of fileList) {
              try {
@@ -129,45 +119,45 @@ export const useGallery = () => {
         await refreshImages();
         setIsProcessing(false);
         return firstAddedId;
-    };
+    }, [storage, refreshImages, extractThumbnail]);
 
-    const deletePhoto = async (id) => {
+    const deletePhoto = useCallback(async (id) => {
         await storage.removeImage(id);
-        if (selectedId === id) setSelectedId(null);
+        setSelectedId(current => current === id ? null : current);
         await refreshImages();
-    };
+    }, [storage, refreshImages]);
 
-    const selectPhoto = (id) => {
+    const selectPhoto = useCallback((id) => {
         setSelectedId(id);
-    };
+    }, []);
 
     // Helpers
-    const getSelectedFile = async () => {
+    const getSelectedFile = useCallback(async () => {
         if (!selectedId) return null;
         return await storage.getImageFile(selectedId);
-    };
+    }, [selectedId, storage]);
 
-    const getSelectedState = async () => {
+    const getSelectedState = useCallback(async () => {
         if (!selectedId) return null;
         return await storage.loadState(selectedId);
-    };
+    }, [selectedId, storage]);
 
-    const saveSelectedState = async (adjustments) => {
+    const saveSelectedState = useCallback(async (adjustments) => {
         if (!selectedId) return;
         await storage.saveState(selectedId, adjustments);
-    };
+    }, [selectedId, storage]);
 
-    const getFile = async (id) => {
+    const getFile = useCallback(async (id) => {
         return await storage.getImageFile(id);
-    };
+    }, [storage]);
 
-    const getState = async (id) => {
+    const getState = useCallback(async (id) => {
         return await storage.loadState(id);
-    };
+    }, [storage]);
 
-    const saveState = async (id, adjustments) => {
+    const saveState = useCallback(async (id, adjustments) => {
         await storage.saveState(id, adjustments);
-    };
+    }, [storage]);
 
     return {
         images,
