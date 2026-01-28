@@ -23,6 +23,16 @@ const BatchExportModal = ({
         }
     }, [isOpen, images]);
 
+    // Prevent body scroll when modal is open
+    useEffect(() => {
+        if (isOpen) {
+            document.body.style.overflow = 'hidden';
+        }
+        return () => {
+            document.body.style.overflow = 'unset';
+        };
+    }, [isOpen]);
+
     if (!isOpen) return null;
 
     const toggleSelection = (id) => {
@@ -49,14 +59,6 @@ const BatchExportModal = ({
         if (selectedIds.size === 0) return;
         onExport(Array.from(selectedIds), removeAfter);
     };
-
-    // Prevent body scroll when modal is open
-    useEffect(() => {
-        document.body.style.overflow = 'hidden';
-        return () => {
-            document.body.style.overflow = 'unset';
-        };
-    }, []);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
