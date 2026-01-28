@@ -154,6 +154,20 @@ const RawUploader = () => {
         }
     };
 
+    // Synchronously reset state to defaults to prevent UI flickering/leaking old state
+    // while the new image loads asynchronously.
+    setWbRed(1.0); setWbGreen(1.0); setWbBlue(1.0);
+    setHighlights(0.0); setShadows(0.0);
+    setWhites(0.0); setBlacks(0.0);
+    setSaturation(1.0); setContrast(1.0);
+    setExposure(0.0); setInitialExposure(0.0);
+    setMeteringMode('hybrid');
+    setInputGamma(1.0);
+    setTargetLogSpace('None');
+    setExportFormat('tiff');
+    setLutData(null); setLutName(null); setLutSize(null);
+    setImageState(null); // Clear previous image state immediately
+
     loadSelectedImage();
   }, [gallery.selectedId]);
 
