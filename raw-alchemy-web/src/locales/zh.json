@@ -6,7 +6,6 @@
   "uploadPrompt": "选择 RAW 文件",
   "loadingDecoding": "解码中...",
   "exporting": "编码中...",
-  "exportingSub": "请稍候。",
   "error": "错误",
   "tabs": {
     "basic": "基础",
@@ -50,6 +49,7 @@
     "format": "格式",
     "button": "保存图片",
     "encoding": "处理中...",
+    "exportingSub": "请稍候。",
     "batch_title": "批量导出",
     "batch_button": "批量导出",
     "select_images": "选择要导出的图片",

@@ -6,7 +6,6 @@
   "uploadPrompt": "Select RAW File",
   "loadingDecoding": "Decoding...",
   "exporting": "Encoding...",
-  "exportingSub": "Please wait.",
   "error": "Error",
   "tabs": {
     "basic": "Basic",
@@ -50,6 +49,7 @@
     "format": "Format",
     "button": "Save Image",
     "encoding": "Processing...",
+    "exportingSub": "Please wait.",
     "batch_title": "Batch Export",
     "batch_button": "Batch Export",
     "select_images": "Select Images to Export",

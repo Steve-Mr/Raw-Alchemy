@@ -815,7 +815,7 @@ const RawUploader = () => {
         progress={batchProgress}
     />
 
-    <div style={{ display: 'none' }}>
+    <div style={{ position: 'absolute', top: '-10000px', left: '-10000px', visibility: 'hidden' }}>
         {batchImageState && (
             <GLCanvas
                 ref={batchCanvasRef}
