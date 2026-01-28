@@ -108,7 +108,7 @@ export const useGallery = () => {
                  const validation = validateFile(file);
                  if (!validation.valid) {
                      console.warn("Validation failed:", validation.error);
-                     setError(validation.error);
+                     setError(prev => prev ? `${prev}\n${validation.error}` : validation.error);
                      continue;
                  }
 
