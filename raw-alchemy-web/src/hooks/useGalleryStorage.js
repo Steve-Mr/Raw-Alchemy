@@ -7,25 +7,30 @@ const META_STORE = 'gallery_meta';
 const FILE_STORE = 'gallery_files';
 const STATE_STORE = 'gallery_states';
 
+let dbPromise;
+
+const getDB = () => {
+  if (!dbPromise) {
+    dbPromise = openDB(DB_NAME, DB_VERSION, {
+      upgrade(db) {
+        if (!db.objectStoreNames.contains(META_STORE)) {
+          db.createObjectStore(META_STORE, { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains(FILE_STORE)) {
+          db.createObjectStore(FILE_STORE, { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains(STATE_STORE)) {
+          db.createObjectStore(STATE_STORE, { keyPath: 'id' });
+        }
+      },
+    });
+  }
+  return dbPromise;
+};
+
 export const useGalleryStorage = () => {
 
   return useMemo(() => {
-    const getDB = async () => {
-      return openDB(DB_NAME, DB_VERSION, {
-        upgrade(db) {
-          if (!db.objectStoreNames.contains(META_STORE)) {
-            db.createObjectStore(META_STORE, { keyPath: 'id' });
-          }
-          if (!db.objectStoreNames.contains(FILE_STORE)) {
-            db.createObjectStore(FILE_STORE, { keyPath: 'id' });
-          }
-          if (!db.objectStoreNames.contains(STATE_STORE)) {
-            db.createObjectStore(STATE_STORE, { keyPath: 'id' });
-          }
-        },
-      });
-    };
-
     const getImages = async () => {
       const db = await getDB();
       // Returns array of metadata objects (lightweight)
