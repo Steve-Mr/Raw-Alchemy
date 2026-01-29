@@ -43,27 +43,29 @@ export const useGalleryStorage = () => {
 
       const tx = db.transaction([META_STORE, FILE_STORE, STATE_STORE], 'readwrite');
 
-      // Meta
-      await tx.objectStore(META_STORE).add({
-        id,
-        name: file.name,
-        size: file.size, // For duplicate detection
-        lastModified: file.lastModified, // For duplicate detection
-        date: Date.now(),
-        thumbnail: thumbnailData // Blob or DataURL
-      });
+      await Promise.all([
+        // Meta
+        tx.objectStore(META_STORE).add({
+          id,
+          name: file.name,
+          size: file.size, // For duplicate detection
+          lastModified: file.lastModified, // For duplicate detection
+          date: Date.now(),
+          thumbnail: thumbnailData // Blob or DataURL
+        }),
 
-      // File
-      await tx.objectStore(FILE_STORE).add({
-        id,
-        file
-      });
+        // File
+        tx.objectStore(FILE_STORE).add({
+          id,
+          file
+        }),
 
-      // Default State
-      await tx.objectStore(STATE_STORE).add({
+        // Default State
+        tx.objectStore(STATE_STORE).add({
           id,
           adjustments: null
-      });
+        })
+      ]);
 
       await tx.done;
     };
