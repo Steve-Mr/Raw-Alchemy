@@ -45,32 +45,42 @@ export const useLutLibrary = () => {
       const fileArray = Array.from(files);
 
       const db = await openDB(DB_NAME, DB_VERSION);
-      const newLuts = [];
-
-      for (const file of fileArray) {
+      // 1. Read and parse files in parallel
+      const parsePromises = fileArray.map(async (file) => {
         try {
           const text = await file.text();
           const { size, data, title } = parseCubeLUT(text);
 
           const lutName = title === 'Untitled LUT' ? file.name : title;
 
-          const lutRecord = {
+          return {
             id: crypto.randomUUID(),
             name: lutName,
             size,
             data, // Float32Array
             dateAdded: Date.now()
           };
-
-          await db.put(STORE_NAME, lutRecord);
-          newLuts.push(lutRecord);
         } catch (parseErr) {
           console.error(`Failed to parse ${file.name}:`, parseErr);
-          // We could return a partial error, but for now just log it
+          return null;
         }
-      }
+      });
 
-      setLuts(prev => [...prev, ...newLuts]);
+      const results = await Promise.all(parsePromises);
+      const validLuts = results.filter(lut => lut !== null);
+
+      // 2. Batch write to database in a single transaction
+      if (validLuts.length > 0) {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        // idb's transaction.objectStore returns a store wrapper that doesn't need explicit request waiting
+        // but parallel operations on the store are faster
+        await Promise.all([
+          ...validLuts.map(lut => tx.store.put(lut)),
+          tx.done
+        ]);
+
+        setLuts(prev => [...prev, ...validLuts]);
+      }
     } catch (err) {
       console.error('Error importing LUTs:', err);
       setError(err);
