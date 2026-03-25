@@ -4,6 +4,7 @@ import numpy as np
 import colour
 import os
 from typing import Optional
+from functools import lru_cache
 
 # 尝试导入同级目录下的模块，如果失败则尝试绝对导入 (方便不同运行环境调试)
 from raw_alchemy import utils
@@ -16,6 +17,14 @@ from raw_alchemy.file_io import save_image
 # ==========================================
 #              核心处理函数
 # ==========================================
+
+@lru_cache(maxsize=32)
+def _read_lut_cached(lut_path: str):
+    """
+    缓存 LUT 加载，避免在批处理中重复读取同一个大文件。
+    """
+    return colour.read_LUT(lut_path)
+
 
 def process_image(
     raw_path: str,
@@ -117,7 +126,7 @@ def process_image(
     if lut_path:
         logger.info(f"  🔹 [Step 5] Applying LUT {os.path.basename(lut_path)}...")
         try:
-            lut = colour.read_LUT(lut_path)
+            lut = _read_lut_cached(lut_path)
             
             # 3D LUT 使用 Numba 加速
             if isinstance(lut, colour.LUT3D):
