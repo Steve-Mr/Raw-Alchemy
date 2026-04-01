@@ -51,9 +51,8 @@ def process_path(
             log_message(f"❌ Error: {error_msg}")
             raise ValueError(error_msg)
 
-        raw_files = []
-        for ext in SUPPORTED_RAW_EXTENSIONS:
-            raw_files.extend([f for f in os.listdir(input_path) if f.lower().endswith(ext)])
+        extensions = tuple(SUPPORTED_RAW_EXTENSIONS)
+        raw_files = [f for f in os.listdir(input_path) if f.lower().endswith(extensions)]
 
         if not raw_files:
             log_message("⚠️ No supported RAW files found in the input directory.")
